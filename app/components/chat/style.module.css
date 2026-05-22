@@ -1,12 +1,33 @@
 .answerIcon {
   position: relative;
-  background: url(./icons/robot.svg);
+  border-radius: 12px;
+  background: #F3E8D6;
+  box-shadow: inset 0 0 0 1px rgba(114, 83, 41, 0.16);
+}
+
+.answerIcon::after {
+  content: 'AF';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #725329;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.messageContent {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .typeingIcon {
   position: absolute;
   top: 0px;
   left: 0px;
+  z-index: 1;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -19,9 +40,22 @@
 
 
 .questionIcon {
-  background: url(./icons/default-avatar.jpg);
+  background: #1F2937;
   background-size: contain;
-  border-radius: 50%;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.questionIcon::after {
+  content: 'You';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .answer::before,
@@ -35,7 +69,7 @@
 
 .answer::before {
   left: 0;
-  background: url(./icons/answer.svg) no-repeat;
+  background: none;
 }
 
 .answerWrap .itemOperation {
@@ -48,7 +82,7 @@
 
 .question::before {
   right: 0;
-  background: url(./icons/question.svg) no-repeat;
+  background: none;
 }
 
 .textArea {
@@ -79,7 +113,7 @@
 
 .sendBtn:hover {
   background-image: url(./icons/send-active.svg);
-  background-color: #EBF5FF;
+  background-color: #F3E8D6;
 }
 
 .textArea:focus+div .count {

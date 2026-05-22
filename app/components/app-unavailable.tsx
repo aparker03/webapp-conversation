@@ -14,15 +14,27 @@ const AppUnavailable: FC<IAppUnavailableProps> = ({
 }) => {
   const { t } = useTranslation()
   let message = errMessage
-  if (!errMessage) { message = (isUnknownReason ? t('app.common.appUnkonwError') : t('app.common.appUnavailable')) as string }
+  if (!errMessage) {
+    message = isUnknownReason
+      ? 'The app could not connect to its resource service. Please check the configuration or try again later.'
+      : t('app.common.appUnavailable') as string
+  }
 
   return (
-    <div className='flex items-center justify-center w-screen h-screen'>
-      <h1 className='mr-5 h-[50px] leading-[50px] pr-5 text-[24px] font-medium'
-        style={{
-          borderRight: '1px solid rgba(0,0,0,.3)',
-        }}>{(errMessage || isUnknownReason) ? 500 : 404}</h1>
-      <div className='text-sm'>{message}</div>
+    <div className='flex items-center justify-center w-screen h-screen bg-[#F7F4EF] px-4'>
+      <div className='max-w-md rounded-xl border border-[#E6DDD1] bg-white p-6 shadow-sm'>
+        <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>AccessFirst</div>
+        <div className='mt-3 flex items-start'>
+          <h1 className='mr-5 h-[50px] leading-[50px] pr-5 text-[24px] font-semibold text-[#1F2937]'
+            style={{
+              borderRight: '1px solid #E6DDD1',
+            }}>{(errMessage || isUnknownReason) ? 500 : 404}</h1>
+          <div>
+            <div className='text-sm font-semibold text-[#1F2937]'>AccessFirst is temporarily unavailable</div>
+            <div className='mt-1 text-sm leading-5 text-[#475467]'>{message}</div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

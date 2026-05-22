@@ -187,9 +187,9 @@ const Answer: FC<IAnswerProps> = ({
               </div>
             )}
         </div>
-        <div className={`${s.answerWrap} max-w-[calc(100%-3rem)]`}>
+        <div className={`${s.answerWrap} max-w-[calc(100%-3rem)] tablet:max-w-[86%]`}>
           <div className={`${s.answer} relative text-sm text-gray-900`}>
-            <div className={`ml-2 py-3 px-4 bg-gray-100 rounded-tr-2xl rounded-b-2xl ${workflowProcess && 'min-w-[480px]'}`}>
+            <div className={`${s.messageContent} ml-2 py-4 px-4 tablet:px-5 bg-white border border-[#E6DDD1] shadow-sm rounded-tr-2xl rounded-b-2xl leading-6 text-[#1F2937] ${workflowProcess && 'tablet:min-w-[480px]'}`}>
               {workflowProcess && (
                 <WorkflowProcess data={workflowProcess} hideInfo />
               )}
@@ -205,11 +205,11 @@ const Answer: FC<IAnswerProps> = ({
                     <StreamdownMarkdown content={content} />
                   ))}
               {suggestedQuestions.length > 0 && (
-                <div className="mt-3">
-                  <div className="flex gap-1 mt-1 flex-wrap">
+                <div className="mt-4 border-t border-[#EEE7DD] pt-3">
+                  <div className="flex gap-2 mt-1 flex-wrap">
                     {suggestedQuestions.map((suggestion, index) => (
                       <div key={index} className="flex items-center gap-1">
-                        <Button className="text-sm" type="link" onClick={() => suggestionClick(suggestion)}>{suggestion}</Button>
+                        <Button className="!h-auto min-h-9 text-sm !justify-start !rounded-full !px-3 !py-2 !text-[#725329] !border-[#DED2C1] !bg-[#FBFAF8] hover:!border-[#BFA783]" type="link" onClick={() => suggestionClick(suggestion)}>{suggestion}</Button>
                       </div>
                     ))}
                   </div>

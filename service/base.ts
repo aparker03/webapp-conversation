@@ -4,6 +4,8 @@ import type { AnnotationReply, MessageEnd, MessageReplace, ThoughtItem } from '@
 import type { VisionFile } from '@/types/app'
 
 const TIME_OUT = 100000
+const ACCESSFIRST_SERVICE_ERROR_MESSAGE = 'AccessFirst could not connect to its resource service. Please check the app configuration or try again later.'
+const TECHNICAL_ERROR_PATTERN = /(connect\s|EACCES|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|fetch failed|Failed to fetch|NetworkError|AxiosError|https?:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|:\d{2,5}\b|stack trace)/i
 
 const ContentType = {
   json: 'application/json',
@@ -137,6 +139,20 @@ function unicodeToChar(text: string) {
   return text.replace(/\\u[0-9a-f]{4}/g, (_match, p1) => {
     return String.fromCharCode(parseInt(p1, 16))
   })
+}
+
+const getPublicErrorMessage = (error: unknown, fallback = 'Server Error') => {
+  const message = (() => {
+    if (typeof error === 'string') { return error }
+    if (error && typeof error === 'object' && 'message' in error) { return String((error as { message?: unknown }).message || '') }
+    if (error === undefined || error === null) { return fallback }
+    return String(error)
+  })()
+
+  if (!message.trim()) { return fallback }
+  if (TECHNICAL_ERROR_PATTERN.test(message)) { return ACCESSFIRST_SERVICE_ERROR_MESSAGE }
+
+  return message
 }
 
 const handleStream = (
@@ -293,13 +309,13 @@ const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: I
                   // eslint-disable-next-line no-new
                   new Promise(() => {
                     bodyJson.then((data: any) => {
-                      Toast.notify({ type: 'error', message: data.message })
+                      Toast.notify({ type: 'error', message: getPublicErrorMessage(data?.message) })
                     })
                   })
               }
             }
             catch (e) {
-              Toast.notify({ type: 'error', message: `${e}` })
+              Toast.notify({ type: 'error', message: getPublicErrorMessage(e) })
             }
 
             return Promise.reject(resClone)
@@ -317,7 +333,7 @@ const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: I
           resolve(needAllResponseContent ? resClone : data)
         })
         .catch((err) => {
-          Toast.notify({ type: 'error', message: err })
+          Toast.notify({ type: 'error', message: getPublicErrorMessage(err) })
           reject(err)
         })
     }),
@@ -386,7 +402,7 @@ export const ssePost = (
         // eslint-disable-next-line no-new
         new Promise(() => {
           res.json().then((data: any) => {
-            Toast.notify({ type: 'error', message: data.message || 'Server Error' })
+            Toast.notify({ type: 'error', message: getPublicErrorMessage(data?.message) })
           })
         })
         onError?.('Server Error')
@@ -394,7 +410,7 @@ export const ssePost = (
       }
       return handleStream(res, (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {
         if (moreInfo.errorMessage) {
-          Toast.notify({ type: 'error', message: moreInfo.errorMessage })
+          Toast.notify({ type: 'error', message: getPublicErrorMessage(moreInfo.errorMessage) })
           return
         }
         onData?.(str, isFirstMessage, moreInfo)
@@ -403,8 +419,8 @@ export const ssePost = (
       }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished)
     })
     .catch((e) => {
-      Toast.notify({ type: 'error', message: e })
-      onError?.(e)
+      Toast.notify({ type: 'error', message: getPublicErrorMessage(e) })
+      onError?.(getPublicErrorMessage(e))
     })
 }
 

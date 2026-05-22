@@ -18,7 +18,15 @@
 }
 
 .customBtn {
-  width: 136px;
+  min-width: 148px;
+  width: auto;
+  border-radius: 10px;
+  background: #7a5a2e !important;
+  box-shadow: 0 8px 18px -10px rgba(122, 90, 46, 0.7);
+}
+
+.customBtn:hover {
+  background: #62471f !important;
 }
 
 .logo {

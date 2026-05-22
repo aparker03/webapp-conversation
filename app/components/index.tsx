@@ -84,6 +84,7 @@ const Main: FC<IMainProps> = () => {
 
   const [conversationIdChangeBecauseOfNew, setConversationIdChangeBecauseOfNew, getConversationIdChangeBecauseOfNew] = useGetState(false)
   const [isChatStarted, { setTrue: setChatStarted, setFalse: setChatNotStarted }] = useBoolean(false)
+  const [draftExampleQuery, setDraftExampleQuery] = useState('')
   const handleStartChat = (inputs: Record<string, any>) => {
     createNewChat()
     setConversationIdChangeBecauseOfNew(true)
@@ -91,6 +92,10 @@ const Main: FC<IMainProps> = () => {
     setChatStarted()
     // parse variables in introduction
     setChatList(generateNewChatListWithOpenStatement('', inputs))
+  }
+  const handleExampleSelect = (example: string, inputs: Record<string, any>) => {
+    handleStartChat(inputs)
+    setDraftExampleQuery(example)
   }
   const hasSetInputs = (() => {
     if (!isNewConversation) { return true }
@@ -306,8 +311,9 @@ const Main: FC<IMainProps> = () => {
 
     let emptyRequiredInput = false
     promptConfig.prompt_variables.forEach((item) => {
-      if (item.required && !currInputs[item.key])
+      if (item.required && !currInputs[item.key]) {
         emptyRequiredInput = true
+      }
     })
 
     if (emptyRequiredInput) {
@@ -648,19 +654,19 @@ const Main: FC<IMainProps> = () => {
     )
   }
 
-  if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage={!hasSetAppConfig ? 'Please set APP_ID and API_KEY in config/index.tsx' : ''} /> }
+  if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage={!hasSetAppConfig ? 'AccessFirst is missing required app configuration.' : ''} /> }
 
   if (!APP_ID || !APP_INFO || !promptConfig) { return <Loading type='app' /> }
 
   return (
-    <div className='bg-gray-100'>
+    <div className='min-h-screen bg-[#F7F4EF] text-[#1F2937]'>
       <Header
         title={APP_INFO.title}
         isMobile={isMobile}
         onShowSideBar={showSidebar}
         onCreateNewChat={() => handleConversationIdChange('-1')}
       />
-      <div className="flex rounded-t-2xl bg-white overflow-hidden">
+      <div className="flex rounded-t-[24px] bg-[#FBFAF8] overflow-hidden border-t border-[#E5DDD1] shadow-[0_-18px_48px_-36px_rgba(85,64,38,0.55)]">
         {/* sidebar */}
         {!isMobile && renderSidebar()}
         {isMobile && isShowSidebar && (
@@ -679,6 +685,7 @@ const Main: FC<IMainProps> = () => {
             siteInfo={APP_INFO}
             promptConfig={promptConfig}
             onStartChat={handleStartChat}
+            onExampleSelect={handleExampleSelect}
             canEditInputs={canEditInputs}
             savedInputs={currInputs as Record<string, any>}
             onInputsChange={setCurrInputs}
@@ -686,7 +693,7 @@ const Main: FC<IMainProps> = () => {
 
           {
             hasSetInputs && (
-              <div className='relative grow pc:w-[794px] max-w-full mobile:w-full pb-[180px] mx-auto mb-3.5' ref={chatListDomRef}>
+              <div className='relative grow pc:w-[820px] max-w-full mobile:w-full pb-[180px] mx-auto mb-3.5' ref={chatListDomRef}>
                 <Chat
                   chatList={chatList}
                   onSend={handleSend}
@@ -695,6 +702,8 @@ const Main: FC<IMainProps> = () => {
                   checkCanSend={checkCanSend}
                   visionConfig={visionConfig}
                   fileConfig={fileConfig}
+                  draftQuery={draftExampleQuery}
+                  onDraftConsumed={() => setDraftExampleQuery('')}
                 />
               </div>)
           }

@@ -1,5 +1,6 @@
 .appIcon {
-  @apply flex items-center justify-center relative w-9 h-9 text-lg bg-teal-100 rounded-lg grow-0 shrink-0;
+  @apply flex items-center justify-center relative w-9 h-9 text-xs font-bold tracking-[0.08em] text-[#725329] bg-[#F3E8D6] rounded-lg grow-0 shrink-0;
+  box-shadow: inset 0 0 0 1px rgba(114, 83, 41, 0.16);
 }
 
 .appIcon.large {

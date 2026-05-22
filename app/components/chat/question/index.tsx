@@ -15,10 +15,10 @@ const Question: FC<IQuestionProps> = ({ id, content, useCurrentUserAvatar, imgSr
   const userName = ''
   return (
     <div className='flex items-start justify-end' key={id}>
-      <div>
+      <div className='max-w-[calc(100%-3rem)] tablet:max-w-[78%]'>
         <div className={`${s.question} relative text-sm text-gray-900`}>
           <div
-            className={'mr-2 py-3 px-4 bg-blue-500 rounded-tl-2xl rounded-b-2xl'}
+            className={`${s.messageContent} mr-2 py-3 px-4 tablet:px-5 bg-[#725329] text-white rounded-tl-2xl rounded-b-2xl shadow-sm leading-6`}
           >
             {imgSrcs && imgSrcs.length > 0 && (
               <ImageGallery srcs={imgSrcs} />

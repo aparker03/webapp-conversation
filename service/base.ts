@@ -4,6 +4,8 @@ import type { AnnotationReply, MessageEnd, MessageReplace, ThoughtItem } from '@
 import type { VisionFile } from '@/types/app'
 
 const TIME_OUT = 100000
+const ANONYMOUS_USER_STORAGE_KEY = 'accessfirst_anonymous_user_id'
+const ANONYMOUS_USER_HEADER = 'x-accessfirst-anonymous-user-id'
 const ACCESSFIRST_SERVICE_ERROR_MESSAGE = 'AccessFirst could not connect to its resource service. Please check the app configuration or try again later.'
 const TECHNICAL_ERROR_PATTERN = /(connect\s|EACCES|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|fetch failed|Failed to fetch|NetworkError|AxiosError|https?:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|:\d{2,5}\b|stack trace)/i
 
@@ -141,6 +143,31 @@ function unicodeToChar(text: string) {
   })
 }
 
+const createAnonymousUserId = () => {
+  const randomId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `af_${randomId}`
+}
+
+const getAnonymousUserId = () => {
+  try {
+    const storage = globalThis.localStorage
+    const existingId = storage?.getItem(ANONYMOUS_USER_STORAGE_KEY)
+    if (existingId) { return existingId }
+
+    const newId = createAnonymousUserId()
+    storage?.setItem(ANONYMOUS_USER_STORAGE_KEY, newId)
+    return newId
+  }
+  catch {
+    return createAnonymousUserId()
+  }
+}
+
+const withAnonymousUserHeader = (headers: Headers) => {
+  headers.set(ANONYMOUS_USER_HEADER, getAnonymousUserId())
+  return headers
+}
+
 const getPublicErrorMessage = (error: unknown, fallback = 'Server Error') => {
   const message = (() => {
     if (typeof error === 'string') { return error }
@@ -264,6 +291,7 @@ const handleStream = (
 
 const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: IOtherOptions) => {
   const options = Object.assign({}, baseOptions, fetchOptions)
+  options.headers = withAnonymousUserHeader(new Headers(options.headers))
 
   const urlPrefix = API_PREFIX
 
@@ -355,7 +383,10 @@ export const upload = (fetchOptions: any): Promise<any> => {
   return new Promise((resolve, reject) => {
     const xhr = options.xhr
     xhr.open(options.method, options.url)
-    for (const key in options.headers) { xhr.setRequestHeader(key, options.headers[key]) }
+    xhr.setRequestHeader(ANONYMOUS_USER_HEADER, getAnonymousUserId())
+    if (options.headers) {
+      for (const key in options.headers) { xhr.setRequestHeader(key, options.headers[key]) }
+    }
 
     xhr.withCredentials = true
     xhr.onreadystatechange = function () {
@@ -389,6 +420,7 @@ export const ssePost = (
   const options = Object.assign({}, baseOptions, {
     method: 'POST',
   }, fetchOptions)
+  options.headers = withAnonymousUserHeader(new Headers(options.headers))
 
   const urlPrefix = API_PREFIX
   const urlWithPrefix = `${urlPrefix}${url.startsWith('/') ? url : `/${url}`}`

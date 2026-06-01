@@ -10,6 +10,7 @@ import Button from '@/app/components/base/button'
 import StreamdownMarkdown from '@/app/components/base/streamdown-markdown'
 import Tooltip from '@/app/components/base/tooltip'
 import WorkflowProcess from '@/app/components/workflow/workflow-process'
+import { SHOW_WORKFLOW_DEBUG } from '@/config'
 import { randomString } from '@/utils/string'
 import ImageGallery from '../../base/image-gallery'
 import LoadingAnim from '../loading-anim'
@@ -37,6 +38,19 @@ const OpeningStatementIcon: FC<{ className?: string }> = ({ className }) => (
 const RatingIcon: FC<{ isLike: boolean }> = ({ isLike }) => {
   return isLike ? <HandThumbUpIcon className="w-4 h-4" /> : <HandThumbDownIcon className="w-4 h-4" />
 }
+
+const ResourceSearchStatus: FC = () => (
+  <div
+    className="flex items-center gap-3 text-sm font-medium text-[#5F4A2A]"
+    role="status"
+    aria-live="polite"
+  >
+    <span className="flex h-5 w-6 items-center justify-center">
+      <LoadingAnim type="text" />
+    </span>
+    <span>Searching available records...</span>
+  </div>
+)
 
 const EditIcon: FC<{ className?: string }> = ({ className }) => {
   return (
@@ -83,6 +97,9 @@ const Answer: FC<IAnswerProps> = ({
 }) => {
   const { id, content, feedback, agent_thoughts, workflowProcess, suggestedQuestions = [] } = item
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
+  const showWorkflowDebug = SHOW_WORKFLOW_DEBUG
+  const hasContent = !!content?.trim()
+  const shouldShowDebugLoading = showWorkflowDebug && isResponding && (isAgentMode ? (!content && (agent_thoughts || []).filter(item => !!item.thought || !!item.tool).length === 0) : !content)
 
   const { t } = useTranslation()
 
@@ -189,21 +206,25 @@ const Answer: FC<IAnswerProps> = ({
         </div>
         <div className={`${s.answerWrap} max-w-[calc(100%-3rem)] tablet:max-w-[86%]`}>
           <div className={`${s.answer} relative text-sm text-gray-900`}>
-            <div className={`${s.messageContent} ml-2 py-4 px-4 tablet:px-5 bg-white border border-[#E6DDD1] shadow-sm rounded-tr-2xl rounded-b-2xl leading-6 text-[#1F2937] ${workflowProcess && 'tablet:min-w-[480px]'}`}>
-              {workflowProcess && (
+            <div className={`${s.messageContent} ml-2 py-4 px-4 tablet:px-5 bg-white border border-[#E6DDD1] shadow-sm rounded-tr-2xl rounded-b-2xl leading-6 text-[#1F2937] ${workflowProcess && showWorkflowDebug ? 'tablet:min-w-[480px]' : ''}`}>
+              {workflowProcess && showWorkflowDebug && (
                 <WorkflowProcess data={workflowProcess} hideInfo />
               )}
-              {(isResponding && (isAgentMode ? (!content && (agent_thoughts || []).filter(item => !!item.thought || !!item.tool).length === 0) : !content))
+              {!showWorkflowDebug && isResponding && !hasContent
                 ? (
-                  <div className="flex items-center justify-center w-6 h-5">
-                    <LoadingAnim type="text" />
-                  </div>
+                  <ResourceSearchStatus />
                 )
-                : (isAgentMode
-                  ? agentModeAnswer
-                  : (
-                    <StreamdownMarkdown content={content} />
-                  ))}
+                : shouldShowDebugLoading
+                  ? (
+                    <div className="flex items-center justify-center w-6 h-5">
+                      <LoadingAnim type="text" />
+                    </div>
+                  )
+                  : (showWorkflowDebug && isAgentMode
+                    ? agentModeAnswer
+                    : (
+                      <StreamdownMarkdown content={content} />
+                    ))}
               {suggestedQuestions.length > 0 && (
                 <div className="mt-4 border-t border-[#EEE7DD] pt-3">
                   <div className="flex gap-2 mt-1 flex-wrap">

@@ -38,7 +38,9 @@ export interface IChatProps {
   visionConfig?: VisionSettings
   fileConfig?: FileUpload
   draftQuery?: string
+  draftQueryMode?: 'example' | 'edit' | null
   onDraftConsumed?: () => void
+  onEditAndResend?: (message: string) => void
 }
 
 const Chat: FC<IChatProps> = ({
@@ -54,14 +56,20 @@ const Chat: FC<IChatProps> = ({
   visionConfig,
   fileConfig,
   draftQuery,
+  draftQueryMode,
   onDraftConsumed,
+  onEditAndResend,
 }) => {
   const { t } = useTranslation()
   const { notify } = Toast
   const isUseInputMethod = useRef(false)
 
   const [query, setQuery] = React.useState('')
+  const [activeDraftMode, setActiveDraftMode] = React.useState<'example' | 'edit' | null>(null)
+  const [activeResendMessageId, setActiveResendMessageId] = React.useState('')
   const queryRef = useRef('')
+  const textareaRef = useRef<{ focus?: () => void } | HTMLTextAreaElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const handleContentChange = (e: any) => {
     const value = e.target.value
@@ -94,8 +102,16 @@ const Chat: FC<IChatProps> = ({
 
     setQuery(draftQuery)
     queryRef.current = draftQuery
+    setActiveDraftMode(draftQueryMode || null)
+    textareaRef.current?.focus()
     onDraftConsumed?.()
-  }, [draftQuery, onDraftConsumed])
+  }, [draftQuery, draftQueryMode, onDraftConsumed])
+
+  useEffect(() => {
+    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
+    }
+  }, [chatList])
   const {
     files,
     onUpload,
@@ -125,6 +141,8 @@ const Chat: FC<IChatProps> = ({
     const docAndOtherFiles: VisionFile[] = getProcessedFiles(attachmentFiles)
     const combinedFiles: VisionFile[] = [...imageFiles, ...docAndOtherFiles]
     onSend(queryRef.current, combinedFiles)
+    setActiveDraftMode(null)
+    setActiveResendMessageId('')
     if (!files.find(item => item.type === TransferMethod.local_file && !item.fileId)) {
       if (files.length) { onClear() }
       if (!isResponding) {
@@ -156,13 +174,27 @@ const Chat: FC<IChatProps> = ({
   const suggestionClick = (suggestion: string) => {
     setQuery(suggestion)
     queryRef.current = suggestion
+    setActiveDraftMode(null)
+    setActiveResendMessageId('')
     handleSend()
   }
 
+  const handleEditAndResend = (id: string, content: string) => {
+    setActiveResendMessageId(id)
+    onEditAndResend?.(content)
+  }
+
+  const handleCancelDraft = () => {
+    setQuery('')
+    queryRef.current = ''
+    setActiveDraftMode(null)
+    setActiveResendMessageId('')
+  }
+
   return (
-    <div className={cn(!feedbackDisabled && 'px-3.5', 'h-full')}>
+    <div className={cn(!feedbackDisabled && 'px-3.5', 'flex h-full min-h-0 flex-col')}>
       {/* Chat List */}
-      <div className="h-full space-y-6 tablet:space-y-7">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pb-6 tablet:space-y-6">
         {chatList.map((item) => {
           if (item.isAnswer) {
             const isLast = item.id === chatList[chatList.length - 1].id
@@ -182,13 +214,31 @@ const Chat: FC<IChatProps> = ({
               content={item.content}
               useCurrentUserAvatar={useCurrentUserAvatar}
               imgSrcs={(item.message_files && item.message_files?.length > 0) ? item.message_files.map(item => item.url) : []}
+              isPreparingResend={activeResendMessageId === item.id}
+              onEditAndResend={handleEditAndResend}
             />
           )
         })}
+        <div ref={messagesEndRef} />
       </div>
       {
         !isHideSendInput && (
-          <div className='fixed z-10 bottom-0 left-1/2 transform -translate-x-1/2 pc:ml-[122px] tablet:ml-[96px] mobile:ml-0 pc:w-[820px] tablet:w-[794px] max-w-full mobile:w-full px-3.5 pb-3'>
+          <div className='z-10 w-full max-w-[980px] shrink-0 px-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 bg-[#FBFAF8]'>
+            {activeDraftMode === 'edit' && (
+              <div className='mb-2 flex items-center justify-between gap-3 rounded-lg border border-[#DED2C1] bg-[#FFFDF9] px-3 py-2 text-sm text-[#344054] shadow-sm'>
+                <div>
+                  <span className='font-semibold text-[#725329]'>Editing a copy of a previous message.</span>
+                  <span className='ml-1 text-[#667085]'>Past responses will not change.</span>
+                </div>
+                <button
+                  type='button'
+                  className='shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
+                  onClick={handleCancelDraft}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
             <div className='relative p-[5.5px] max-h-[170px] bg-white border border-[#D7CDBF] rounded-2xl overflow-y-auto shadow-[0_18px_44px_-24px_rgba(52,64,84,0.45)] focus-within:ring-2 focus-within:ring-[#8A642F]/25'>
               {
                 visionConfig?.enabled && (
@@ -225,6 +275,7 @@ const Chat: FC<IChatProps> = ({
                 )
               }
               <Textarea
+                ref={textareaRef}
                 className={`
                   block w-full px-2 pr-[118px] py-[9px] leading-6 max-h-none text-base text-[#1F2937] placeholder:text-[#667085] outline-none appearance-none resize-none
                   ${visionConfig?.enabled && 'pl-12'}

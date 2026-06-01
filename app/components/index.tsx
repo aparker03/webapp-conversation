@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import produce, { setAutoFreeze } from 'immer'
 import { useBoolean, useGetState } from 'ahooks'
@@ -9,7 +9,7 @@ import Toast from '@/app/components/base/toast'
 import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
-import { fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, updateFeedback } from '@/service'
+import { deleteConversation, fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, updateFeedback } from '@/service'
 import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
@@ -85,6 +85,7 @@ const Main: FC<IMainProps> = () => {
   const [conversationIdChangeBecauseOfNew, setConversationIdChangeBecauseOfNew, getConversationIdChangeBecauseOfNew] = useGetState(false)
   const [isChatStarted, { setTrue: setChatStarted, setFalse: setChatNotStarted }] = useBoolean(false)
   const [draftExampleQuery, setDraftExampleQuery] = useState('')
+  const [draftQueryMode, setDraftQueryMode] = useState<'example' | 'edit' | null>(null)
   const handleStartChat = (inputs: Record<string, any>) => {
     createNewChat()
     setConversationIdChangeBecauseOfNew(true)
@@ -95,7 +96,23 @@ const Main: FC<IMainProps> = () => {
   }
   const handleExampleSelect = (example: string, inputs: Record<string, any>) => {
     handleStartChat(inputs)
+    setDraftQueryMode('example')
     setDraftExampleQuery(example)
+  }
+  const handleEditAndResend = (message: string) => {
+    setDraftQueryMode('edit')
+    setDraftExampleQuery(message)
+  }
+  const resetToNewSearch = () => {
+    createNewChat()
+    setConversationIdChangeBecauseOfNew(true)
+    setCurrConversationId('-1', APP_ID, false)
+    setChatNotStarted()
+    setDraftExampleQuery('')
+    setDraftQueryMode(null)
+    setChatList([])
+    resetNewConversationInputs()
+    hideSidebar()
   }
   const hasSetInputs = (() => {
     if (!isNewConversation) { return true }
@@ -162,33 +179,61 @@ const Main: FC<IMainProps> = () => {
 
   const handleConversationIdChange = (id: string) => {
     if (id === '-1') {
-      createNewChat()
-      setConversationIdChangeBecauseOfNew(true)
+      resetToNewSearch()
+      return
     }
     else {
       setConversationIdChangeBecauseOfNew(false)
+      setDraftExampleQuery('')
+      setDraftQueryMode(null)
     }
     // trigger handleConversationSwitch
     setCurrConversationId(id, APP_ID)
     hideSidebar()
   }
 
+  const handleDeleteConversation = async (id: string) => {
+    if (id === '-1') { return }
+
+    try {
+      await deleteConversation(id)
+      const isDeletingCurrentConversation = id === getCurrConversationId()
+
+      setConversationList(produce(conversationList, (draft) => {
+        const index = draft.findIndex(item => item.id === id)
+        if (index >= 0) { draft.splice(index, 1) }
+        if (isDeletingCurrentConversation && !draft.some(item => item.id === '-1')) {
+          draft.unshift({
+            id: '-1',
+            name: t('app.chat.newChatDefaultName'),
+            inputs: newConversationInputs,
+            introduction: conversationIntroduction,
+            suggested_questions: suggestedQuestions,
+          })
+        }
+      }))
+
+      if (isDeletingCurrentConversation) {
+        setConversationIdChangeBecauseOfNew(true)
+        setCurrConversationId('-1', APP_ID, false)
+        setChatNotStarted()
+        setDraftExampleQuery('')
+        setDraftQueryMode(null)
+        setChatList([])
+      }
+
+      notify({ type: 'success', message: 'Conversation deleted.' })
+      hideSidebar()
+    }
+    catch {
+      notify({ type: 'error', message: 'AccessFirst could not delete this conversation. Please try again later.' })
+    }
+  }
+
   /*
   * chat info. chat is under conversation.
   */
   const [chatList, setChatList, getChatList] = useGetState<ChatItem[]>([])
-  const chatListDomRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    // scroll to bottom with page-level scrolling
-    if (chatListDomRef.current) {
-      setTimeout(() => {
-        chatListDomRef.current?.scrollIntoView({
-          behavior: 'auto',
-          block: 'end',
-        })
-      }, 50)
-    }
-  }, [chatList, currConversationId])
   // user can not edit inputs if user had send message
   const canEditInputs = !chatList.some(item => item.isAnswer === false) && isNewConversation
   const createNewChat = () => {
@@ -648,6 +693,7 @@ const Main: FC<IMainProps> = () => {
       <Sidebar
         list={conversationList}
         onCurrentIdChange={handleConversationIdChange}
+        onDeleteConversation={handleDeleteConversation}
         currentId={currConversationId}
         copyRight={APP_INFO.copyright || APP_INFO.title}
       />
@@ -659,25 +705,25 @@ const Main: FC<IMainProps> = () => {
   if (!APP_ID || !APP_INFO || !promptConfig) { return <Loading type='app' /> }
 
   return (
-    <div className='min-h-screen bg-[#F7F4EF] text-[#1F2937]'>
+    <div className='flex h-dvh flex-col overflow-hidden bg-[#F7F4EF] text-[#1F2937]'>
       <Header
         title={APP_INFO.title}
         isMobile={isMobile}
         onShowSideBar={showSidebar}
-        onCreateNewChat={() => handleConversationIdChange('-1')}
+        onCreateNewChat={resetToNewSearch}
       />
-      <div className="flex rounded-t-[24px] bg-[#FBFAF8] overflow-hidden border-t border-[#E5DDD1] shadow-[0_-18px_48px_-36px_rgba(85,64,38,0.55)]">
+      <div className="flex min-h-0 flex-1 rounded-t-[24px] bg-[#FBFAF8] overflow-hidden border-t border-[#E5DDD1] shadow-[0_-18px_48px_-36px_rgba(85,64,38,0.55)]">
         {/* sidebar */}
         {!isMobile && renderSidebar()}
         {isMobile && isShowSidebar && (
           <div className='fixed inset-0 z-50' style={{ backgroundColor: 'rgba(35, 56, 118, 0.2)' }} onClick={hideSidebar} >
-            <div className='inline-block' onClick={e => e.stopPropagation()}>
+            <div className='inline-block h-full' onClick={e => e.stopPropagation()}>
               {renderSidebar()}
             </div>
           </div>
         )}
         {/* main */}
-        <div className='flex-grow flex flex-col h-[calc(100vh_-_3rem)] overflow-y-auto'>
+        <div className={`flex-grow flex min-h-0 flex-col ${hasSetInputs ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <ConfigSence
             conversationName={conversationName}
             hasSetInputs={hasSetInputs}
@@ -693,7 +739,7 @@ const Main: FC<IMainProps> = () => {
 
           {
             hasSetInputs && (
-              <div className='relative grow pc:w-[820px] max-w-full mobile:w-full pb-[180px] mx-auto mb-3.5' ref={chatListDomRef}>
+              <div className='relative flex min-h-0 w-full max-w-[980px] grow flex-col mobile:w-full mx-auto px-0 pc:px-3 tablet:px-3'>
                 <Chat
                   chatList={chatList}
                   onSend={handleSend}
@@ -703,7 +749,12 @@ const Main: FC<IMainProps> = () => {
                   visionConfig={visionConfig}
                   fileConfig={fileConfig}
                   draftQuery={draftExampleQuery}
-                  onDraftConsumed={() => setDraftExampleQuery('')}
+                  draftQueryMode={draftQueryMode}
+                  onDraftConsumed={() => {
+                    setDraftExampleQuery('')
+                    setDraftQueryMode(null)
+                  }}
+                  onEditAndResend={handleEditAndResend}
                 />
               </div>)
           }

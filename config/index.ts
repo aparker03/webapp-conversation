@@ -13,6 +13,7 @@ export const APP_INFO: AppInfo = {
 
 export const isShowPrompt = false
 export const promptTemplate = ''
+export const SHOW_WORKFLOW_DEBUG = process.env.NEXT_PUBLIC_SHOW_WORKFLOW_DEBUG === 'true'
 
 export const API_PREFIX = '/api'
 

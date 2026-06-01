@@ -1,4 +1,5 @@
 import { getLocaleOnServer } from '@/i18n/server'
+import { getSafeLocale } from '@/i18n'
 
 import './styles/globals.css'
 import './styles/markdown.scss'
@@ -8,14 +9,12 @@ const LocaleLayout = async ({
 }: {
   children: React.ReactNode
 }) => {
-  const locale = await getLocaleOnServer()
+  const locale = getSafeLocale(await getLocaleOnServer())
   return (
-    <html lang={locale ?? 'en'} className="h-full">
-      <body className="h-full">
-        <div className="overflow-x-auto">
-          <div className="w-screen h-screen min-w-[300px]">
-            {children}
-          </div>
+    <html lang={locale} className="h-full overflow-hidden" suppressHydrationWarning>
+      <body className="h-full overflow-hidden" suppressHydrationWarning>
+        <div className="h-dvh min-w-[300px] overflow-hidden">
+          {children}
         </div>
       </body>
     </html>

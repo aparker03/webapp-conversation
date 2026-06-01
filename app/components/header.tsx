@@ -17,7 +17,7 @@ const Header: FC<IHeaderProps> = ({
   onShowSideBar,
   onCreateNewChat,
 }) => {
-  const handleButtonKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, action?: () => void) => {
+  const handleButtonKeyDown = (event: React.KeyboardEvent<HTMLElement>, action?: () => void) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       action?.()
@@ -40,13 +40,18 @@ const Header: FC<IHeaderProps> = ({
           </div>
         )
         : <div className='w-9'></div>}
-      <div className='flex items-center space-x-3 min-w-0'>
+      <button
+        type='button'
+        aria-label='Start a new conversation'
+        className='flex min-w-0 items-center space-x-3 rounded-lg px-2 py-1 text-left hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#8A642F]/40'
+        onClick={() => onCreateNewChat?.()}
+      >
         <AppIcon size="small" />
         <div className='min-w-0 leading-tight'>
           <div className="truncate text-sm font-semibold text-[#1F2937]">{title}</div>
           <div className='hidden tablet:block truncate text-[11px] font-medium text-[#6B5A44]'>LA County behavioral health resource navigation</div>
         </div>
-      </div>
+      </button>
       {isMobile
         ? (
           <div

@@ -48,7 +48,7 @@ const ResourceSearchStatus: FC = () => (
     <span className="flex h-5 w-6 items-center justify-center">
       <LoadingAnim type="text" />
     </span>
-    <span>Searching available records...</span>
+    <span>Generating response...</span>
   </div>
 )
 

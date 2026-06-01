@@ -18,6 +18,7 @@ import { useImageFiles } from '@/app/components/base/image-uploader/hooks'
 import FileUploaderInAttachmentWrapper from '@/app/components/base/file-uploader-in-attachment'
 import type { FileEntity, FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { getProcessedFiles } from '@/app/components/base/file-uploader-in-attachment/utils'
+import { SHOW_WORKFLOW_DEBUG } from '@/config'
 
 export interface IChatProps {
   chatList: ChatItem[]
@@ -191,6 +192,17 @@ const Chat: FC<IChatProps> = ({
     setActiveResendMessageId('')
   }
 
+  const hasVisibleAnswerContent = (item: ChatItem) => {
+    if (item.content?.trim()) { return true }
+    if ((item.message_files || []).length > 0) { return true }
+    if ((item.suggestedQuestions || []).length > 0) { return true }
+
+    const visibleThoughts = (item.agent_thoughts || []).some(thought => !!thought.thought?.trim())
+    if (visibleThoughts) { return true }
+
+    return !!(SHOW_WORKFLOW_DEBUG && (item.workflowProcess || (item.agent_thoughts || []).length > 0))
+  }
+
   return (
     <div className={cn(!feedbackDisabled && 'px-3.5', 'flex h-full min-h-0 flex-col')}>
       {/* Chat List */}
@@ -198,12 +210,15 @@ const Chat: FC<IChatProps> = ({
         {chatList.map((item) => {
           if (item.isAnswer) {
             const isLast = item.id === chatList[chatList.length - 1].id
+            const isRespondingAnswer = !!isResponding && isLast
+            if (!isRespondingAnswer && !hasVisibleAnswerContent(item)) { return null }
+
             return <Answer
               key={item.id}
               item={item}
               feedbackDisabled={feedbackDisabled}
               onFeedback={onFeedback}
-              isResponding={isResponding && isLast}
+              isResponding={isRespondingAnswer}
               suggestionClick={suggestionClick}
             />
           }

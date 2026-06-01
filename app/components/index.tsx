@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import produce, { setAutoFreeze } from 'immer'
 import { useBoolean, useGetState } from 'ahooks'
@@ -25,6 +25,21 @@ import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 
 export interface IMainProps {
   params: any
+}
+
+interface InFlightConversation {
+  requestId: string
+  sourceConversationId: string
+  sourceViewToken: number
+  resolvedConversationId?: string
+  chatList: ChatItem[]
+  completed: boolean
+  discarded?: boolean
+}
+
+interface PendingGeneratingNavigation {
+  type: 'new' | 'conversation'
+  conversationId?: string
 }
 
 const Main: FC<IMainProps> = () => {
@@ -82,15 +97,25 @@ const Main: FC<IMainProps> = () => {
     setExistConversationInfo,
   } = useConversation()
 
-  const [conversationIdChangeBecauseOfNew, setConversationIdChangeBecauseOfNew, getConversationIdChangeBecauseOfNew] = useGetState(false)
+  const [_conversationIdChangeBecauseOfNew, setConversationIdChangeBecauseOfNew, _getConversationIdChangeBecauseOfNew] = useGetState(false)
   const [isChatStarted, { setTrue: setChatStarted, setFalse: setChatNotStarted }] = useBoolean(false)
   const [draftExampleQuery, setDraftExampleQuery] = useState('')
   const [draftQueryMode, setDraftQueryMode] = useState<'example' | 'edit' | null>(null)
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false)
+  const [activeStreamRequestId, setActiveStreamRequestId] = useState('')
+  const [pendingGeneratingNavigation, setPendingGeneratingNavigation] = useState<PendingGeneratingNavigation | null>(null)
+  const viewTokenRef = useRef(0)
+  const fetchConversationTokenRef = useRef(0)
+  const activeStreamRequestIdRef = useRef('')
+  const inFlightConversationsRef = useRef<Record<string, InFlightConversation>>({})
+  const deletedConversationIdsRef = useRef<Set<string>>(new Set())
   const handleStartChat = (inputs: Record<string, any>) => {
+    advanceViewToken()
     createNewChat()
     setConversationIdChangeBecauseOfNew(true)
     setCurrInputs(inputs)
     setChatStarted()
+    setIsLoadingConversation(false)
     // parse variables in introduction
     setChatList(generateNewChatListWithOpenStatement('', inputs))
   }
@@ -104,15 +129,25 @@ const Main: FC<IMainProps> = () => {
     setDraftExampleQuery(message)
   }
   const resetToNewSearch = () => {
+    advanceViewToken()
     createNewChat()
     setConversationIdChangeBecauseOfNew(true)
     setCurrConversationId('-1', APP_ID, false)
     setChatNotStarted()
-    setDraftExampleQuery('')
-    setDraftQueryMode(null)
+    clearDraftState()
     setChatList([])
+    setIsLoadingConversation(false)
     resetNewConversationInputs()
     hideSidebar()
+  }
+  const requestNewConversation = () => {
+    if (isResponding) {
+      setPendingGeneratingNavigation({ type: 'new' })
+      hideSidebar()
+      return
+    }
+
+    resetToNewSearch()
   }
   const hasSetInputs = (() => {
     if (!isNewConversation) { return true }
@@ -147,49 +182,69 @@ const Main: FC<IMainProps> = () => {
     }
 
     // update chat list of current conversation
-    if (!isNewConversation && !conversationIdChangeBecauseOfNew && !isResponding) {
-      fetchChatList(currConversationId).then((res: any) => {
+    if (!isNewConversation) {
+      const selectedConversationId = currConversationId
+      const fetchToken = fetchConversationTokenRef.current + 1
+      fetchConversationTokenRef.current = fetchToken
+      const inFlightConversation = findInFlightConversation(selectedConversationId)
+
+      if (inFlightConversation) {
+        setChatList(inFlightConversation.chatList)
+        setChatStarted()
+        setIsLoadingConversation(false)
+
+        if (!inFlightConversation.completed) { return }
+      }
+      else {
+        setChatList([])
+        setIsLoadingConversation(true)
+      }
+
+      fetchChatList(selectedConversationId).then((res: any) => {
+        if (fetchConversationTokenRef.current !== fetchToken || getCurrConversationId() !== selectedConversationId) { return }
+
         const { data } = res
-        const newChatList: ChatItem[] = generateNewChatListWithOpenStatement(notSyncToStateIntroduction, notSyncToStateInputs)
+        setChatList(buildChatListFromHistory(data || [], notSyncToStateIntroduction, notSyncToStateInputs))
+        setChatStarted()
+      }).catch(() => {
+        if (fetchConversationTokenRef.current !== fetchToken || getCurrConversationId() !== selectedConversationId) { return }
 
-        data.forEach((item: any) => {
-          newChatList.push({
-            id: `question-${item.id}`,
-            content: item.query,
-            isAnswer: false,
-            message_files: item.message_files?.filter((file: any) => file.belongs_to === 'user') || [],
-
-          })
-          newChatList.push({
-            id: item.id,
-            content: item.answer,
-            agent_thoughts: addFileInfos(item.agent_thoughts ? sortAgentSorts(item.agent_thoughts) : item.agent_thoughts, item.message_files),
-            feedback: item.feedback,
-            isAnswer: true,
-            message_files: item.message_files?.filter((file: any) => file.belongs_to === 'assistant') || [],
-          })
-        })
-        setChatList(newChatList)
+        setChatList([])
+        notify({ type: 'error', message: 'AccessFirst could not load this conversation. Please try again later.' })
+      }).finally(() => {
+        if (fetchConversationTokenRef.current === fetchToken && getCurrConversationId() === selectedConversationId) { setIsLoadingConversation(false) }
       })
     }
 
-    if (isNewConversation && isChatStarted) { setChatList(generateNewChatListWithOpenStatement()) }
+    if (isNewConversation) {
+      setIsLoadingConversation(false)
+      if (isChatStarted) { setChatList(generateNewChatListWithOpenStatement()) }
+    }
   }
   useEffect(handleConversationSwitch, [currConversationId, inited])
 
-  const handleConversationIdChange = (id: string) => {
-    if (id === '-1') {
-      resetToNewSearch()
-      return
-    }
-    else {
-      setConversationIdChangeBecauseOfNew(false)
-      setDraftExampleQuery('')
-      setDraftQueryMode(null)
-    }
+  const openSavedConversation = (id: string) => {
+    advanceViewToken()
+    setConversationIdChangeBecauseOfNew(false)
+    clearDraftState()
     // trigger handleConversationSwitch
     setCurrConversationId(id, APP_ID)
     hideSidebar()
+  }
+
+  const handleConversationIdChange = (id: string) => {
+    if (id === '-1') {
+      requestNewConversation()
+      return
+    }
+
+    if (isResponding) {
+      setPendingGeneratingNavigation({ type: 'conversation', conversationId: id })
+      hideSidebar()
+      return
+    }
+
+    openSavedConversation(id)
   }
 
   const handleDeleteConversation = async (id: string) => {
@@ -197,6 +252,11 @@ const Main: FC<IMainProps> = () => {
 
     try {
       await deleteConversation(id)
+      deletedConversationIdsRef.current.add(id)
+      Object.keys(inFlightConversationsRef.current).forEach((requestId) => {
+        const inFlight = inFlightConversationsRef.current[requestId]
+        if (inFlight.resolvedConversationId === id || inFlight.sourceConversationId === id) { delete inFlightConversationsRef.current[requestId] }
+      })
       const isDeletingCurrentConversation = id === getCurrConversationId()
 
       setConversationList(produce(conversationList, (draft) => {
@@ -214,12 +274,13 @@ const Main: FC<IMainProps> = () => {
       }))
 
       if (isDeletingCurrentConversation) {
+        advanceViewToken()
         setConversationIdChangeBecauseOfNew(true)
         setCurrConversationId('-1', APP_ID, false)
         setChatNotStarted()
-        setDraftExampleQuery('')
-        setDraftQueryMode(null)
+        clearDraftState()
         setChatList([])
+        setIsLoadingConversation(false)
       }
 
       notify({ type: 'success', message: 'Conversation deleted.' })
@@ -234,6 +295,207 @@ const Main: FC<IMainProps> = () => {
   * chat info. chat is under conversation.
   */
   const [chatList, setChatList, getChatList] = useGetState<ChatItem[]>([])
+
+  function advanceViewToken() {
+    viewTokenRef.current += 1
+    fetchConversationTokenRef.current += 1
+  }
+
+  function clearDraftState() {
+    setDraftExampleQuery('')
+    setDraftQueryMode(null)
+  }
+
+  function markActiveStream(requestId: string) {
+    activeStreamRequestIdRef.current = requestId
+    setActiveStreamRequestId(requestId)
+  }
+
+  function clearActiveStream(requestId: string) {
+    if (activeStreamRequestIdRef.current !== requestId) { return }
+    activeStreamRequestIdRef.current = ''
+    setActiveStreamRequestId('')
+  }
+
+  function findInFlightConversation(conversationId: string) {
+    return Object.values(inFlightConversationsRef.current).find(item =>
+      !item.discarded && (item.resolvedConversationId === conversationId || item.sourceConversationId === conversationId),
+    )
+  }
+
+  function isViewingStream(requestId: string) {
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (!inFlight) { return false }
+    if (inFlight.discarded) { return false }
+
+    const selectedConversationId = getCurrConversationId()
+    if (inFlight.resolvedConversationId) { return selectedConversationId === inFlight.resolvedConversationId }
+
+    return selectedConversationId === inFlight.sourceConversationId && viewTokenRef.current === inFlight.sourceViewToken
+  }
+
+  function setCachedChatList(requestId: string, nextChatList: ChatItem[]) {
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (!inFlight) { return }
+    if (inFlight.discarded) { return }
+
+    inFlight.chatList = nextChatList
+    if (isViewingStream(requestId)) {
+      setChatStarted()
+      setIsLoadingConversation(false)
+      setChatList(nextChatList)
+    }
+  }
+
+  function updateCachedQA({
+    requestId,
+    responseItem,
+    questionId,
+    placeholderAnswerId,
+    questionItem,
+  }: {
+    requestId: string
+    responseItem: ChatItem
+    questionId: string
+    placeholderAnswerId: string
+    questionItem: ChatItem
+  }) {
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (!inFlight) { return }
+    if (inFlight.discarded) { return }
+
+    const newListWithAnswer = produce(
+      inFlight.chatList.filter(item => item.id !== responseItem.id && item.id !== placeholderAnswerId),
+      (draft) => {
+        if (!draft.find(item => item.id === questionId)) { draft.push({ ...questionItem }) }
+
+        draft.push({ ...responseItem })
+      },
+    )
+    setCachedChatList(requestId, newListWithAnswer)
+  }
+
+  function updateCachedMessage(requestId: string, messageId: string, answer: string) {
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (!inFlight) { return }
+    if (inFlight.discarded) { return }
+
+    const nextChatList = produce(inFlight.chatList, (draft) => {
+      const current = draft.find(item => item.id === messageId)
+      if (current) { current.content = answer }
+    })
+    setCachedChatList(requestId, nextChatList)
+  }
+
+  function removeCachedPlaceholder(requestId: string, placeholderAnswerId: string) {
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (!inFlight) { return }
+
+    setCachedChatList(requestId, inFlight.chatList.filter(item => item.id !== placeholderAnswerId))
+  }
+
+  function removeEmptyAssistantPlaceholders(list: ChatItem[]) {
+    return list.filter(item => !(item.isAnswer && item.id.startsWith('answer-placeholder-') && !item.content?.trim()))
+  }
+
+  function discardActiveLocalStream() {
+    const requestId = activeStreamRequestIdRef.current
+    if (!requestId) { return }
+
+    const inFlight = inFlightConversationsRef.current[requestId]
+    if (inFlight) {
+      inFlight.discarded = true
+      inFlight.completed = true
+      inFlight.chatList = removeEmptyAssistantPlaceholders(inFlight.chatList)
+    }
+
+    setChatList(removeEmptyAssistantPlaceholders(getChatList()))
+    clearActiveStream(requestId)
+    setRespondingFalse()
+  }
+
+  function handleStayOnGeneratingConversation() {
+    setPendingGeneratingNavigation(null)
+  }
+
+  function handleConfirmGeneratingNavigation() {
+    if (!pendingGeneratingNavigation) { return }
+
+    const nextNavigation = pendingGeneratingNavigation
+    setPendingGeneratingNavigation(null)
+    discardActiveLocalStream()
+
+    if (nextNavigation.type === 'conversation' && nextNavigation.conversationId) {
+      openSavedConversation(nextNavigation.conversationId)
+      return
+    }
+
+    resetToNewSearch()
+  }
+
+  function getConversationPreviewName(message: string) {
+    const compactMessage = message.trim().replace(/\s+/g, ' ')
+    if (!compactMessage) { return t('app.chat.newChatDefaultName') as string }
+
+    return compactMessage.length > 48 ? `${compactMessage.slice(0, 45)}...` : compactMessage
+  }
+
+  function upsertConversationInSidebar(
+    id: string,
+    name: string,
+    inputs?: Record<string, any> | null,
+    options: { replaceName?: boolean, removeNewPlaceholder?: boolean } = {},
+  ) {
+    if (!id || id === '-1' || deletedConversationIdsRef.current.has(id)) { return }
+
+    setConversationList(currentList => produce(currentList, (draft) => {
+      if (options.removeNewPlaceholder) {
+        const placeholderIndex = draft.findIndex(item => item.id === '-1')
+        if (placeholderIndex >= 0) { draft.splice(placeholderIndex, 1) }
+      }
+
+      const existing = draft.find(item => item.id === id)
+      if (existing) {
+        if (name && options.replaceName !== false) { existing.name = name }
+        existing.inputs = inputs === undefined ? existing.inputs : inputs
+        existing.introduction = existing.introduction || conversationIntroduction
+        existing.suggested_questions = existing.suggested_questions || suggestedQuestions
+        return
+      }
+
+      draft.unshift({
+        id,
+        name: name || t('app.chat.newChatDefaultName'),
+        inputs: inputs === undefined ? currInputs : inputs,
+        introduction: conversationIntroduction,
+        suggested_questions: suggestedQuestions,
+      })
+    }))
+  }
+
+  function buildChatListFromHistory(data: any[], introduction?: string, inputs?: Record<string, any> | null) {
+    const newChatList: ChatItem[] = generateNewChatListWithOpenStatement(introduction, inputs)
+
+    data.forEach((item: any) => {
+      newChatList.push({
+        id: `question-${item.id}`,
+        content: item.query,
+        isAnswer: false,
+        message_files: item.message_files?.filter((file: any) => file.belongs_to === 'user') || [],
+      })
+      newChatList.push({
+        id: item.id,
+        content: item.answer,
+        agent_thoughts: addFileInfos(item.agent_thoughts ? sortAgentSorts(item.agent_thoughts) : item.agent_thoughts, item.message_files),
+        feedback: item.feedback,
+        isAnswer: true,
+        message_files: item.message_files?.filter((file: any) => file.belongs_to === 'assistant') || [],
+      })
+    })
+
+    return newChatList
+  }
+
   // user can not edit inputs if user had send message
   const canEditInputs = !chatList.some(item => item.isAnswer === false) && isNewConversation
   const createNewChat = () => {
@@ -344,6 +606,20 @@ const Main: FC<IMainProps> = () => {
 
   const [isResponding, { setTrue: setRespondingTrue, setFalse: setRespondingFalse }] = useBoolean(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  useEffect(() => {
+    if (!isResponding) { return }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isResponding])
+
   const { notify } = Toast
   const logError = (message: string) => {
     notify({ type: 'error', message })
@@ -374,29 +650,6 @@ const Main: FC<IMainProps> = () => {
   const [hasStopResponded, setHasStopResponded, getHasStopResponded] = useGetState(false)
   const [isRespondingConIsCurrCon, setIsRespondingConCurrCon, getIsRespondingConIsCurrCon] = useGetState(true)
   const [userQuery, setUserQuery] = useState('')
-
-  const updateCurrentQA = ({
-    responseItem,
-    questionId,
-    placeholderAnswerId,
-    questionItem,
-  }: {
-    responseItem: ChatItem
-    questionId: string
-    placeholderAnswerId: string
-    questionItem: ChatItem
-  }) => {
-    // closesure new list is outdated.
-    const newListWithAnswer = produce(
-      getChatList().filter(item => item.id !== responseItem.id && item.id !== placeholderAnswerId),
-      (draft) => {
-        if (!draft.find(item => item.id === questionId)) { draft.push({ ...questionItem }) }
-
-        draft.push({ ...responseItem })
-      },
-    )
-    setChatList(newListWithAnswer)
-  }
 
   const transformToServerFile = (fileItem: any) => {
     return {
@@ -443,6 +696,9 @@ const Main: FC<IMainProps> = () => {
     }
 
     // question
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const sourceConversationId = getCurrConversationId() || '-1'
+    const sourceViewToken = viewTokenRef.current
     const questionId = `question-${Date.now()}`
     const questionItem = {
       id: questionId,
@@ -459,13 +715,21 @@ const Main: FC<IMainProps> = () => {
     }
 
     const newList = [...getChatList(), questionItem, placeholderAnswerItem]
+    inFlightConversationsRef.current[requestId] = {
+      requestId,
+      sourceConversationId,
+      sourceViewToken,
+      chatList: newList,
+      completed: false,
+    }
+    markActiveStream(requestId)
     setChatList(newList)
 
     let isAgentMode = false
 
     // answer
     const responseItem: ChatItem = {
-      id: `${Date.now()}`,
+      id: placeholderAnswerId,
       content: '',
       agent_thoughts: [],
       message_files: [],
@@ -473,7 +737,6 @@ const Main: FC<IMainProps> = () => {
     }
     let hasSetResponseId = false
 
-    const prevTempNewConversationId = getCurrConversationId() || '-1'
     let tempNewConversationId = ''
 
     setRespondingTrue()
@@ -482,6 +745,9 @@ const Main: FC<IMainProps> = () => {
         setAbortController(abortController)
       },
       onData: (message: string, isFirstMessage: boolean, { conversationId: newConversationId, messageId, taskId }: any) => {
+        const inFlight = inFlightConversationsRef.current[requestId]
+        if (inFlight?.discarded) { return }
+
         if (!isAgentMode) {
           responseItem.content = responseItem.content + message
         }
@@ -494,15 +760,35 @@ const Main: FC<IMainProps> = () => {
           hasSetResponseId = true
         }
 
-        if (isFirstMessage && newConversationId) { tempNewConversationId = newConversationId }
+        if (isFirstMessage && newConversationId) {
+          tempNewConversationId = newConversationId
+          if (inFlight && !inFlight.resolvedConversationId && !deletedConversationIdsRef.current.has(newConversationId)) {
+            inFlight.resolvedConversationId = newConversationId
+            const isNewConversationStream = inFlight.sourceConversationId === '-1'
+            upsertConversationInSidebar(
+              newConversationId,
+              getConversationPreviewName(questionItem.content),
+              currInputs,
+              {
+                replaceName: isNewConversationStream,
+                removeNewPlaceholder: isNewConversationStream,
+              },
+            )
+
+            if (
+              isNewConversationStream
+              && getCurrConversationId() === '-1'
+              && viewTokenRef.current === inFlight.sourceViewToken
+            ) {
+              setCurrConversationId(newConversationId, APP_ID, true)
+            }
+          }
+        }
 
         setMessageTaskId(taskId)
-        // has switched to other conversation
-        if (prevTempNewConversationId !== getCurrConversationId()) {
-          setIsRespondingConCurrCon(false)
-          return
-        }
-        updateCurrentQA({
+        if (!isViewingStream(requestId)) { setIsRespondingConCurrCon(false) }
+        updateCachedQA({
+          requestId,
           responseItem,
           questionId,
           placeholderAnswerId,
@@ -510,28 +796,71 @@ const Main: FC<IMainProps> = () => {
         })
       },
       async onCompleted(hasError?: boolean) {
-        if (hasError) { return }
+        const inFlight = inFlightConversationsRef.current[requestId]
+        if (!inFlight) {
+          setRespondingFalse()
+          clearActiveStream(requestId)
+          return
+        }
+        if (inFlight.discarded) {
+          clearActiveStream(requestId)
+          return
+        }
 
-        if (getConversationIdChangeBecauseOfNew()) {
-          const { data: allConversations }: any = await fetchConversations()
-          const newItem: any = await generationConversationName(allConversations[0].id)
+        if (hasError) {
+          removeCachedPlaceholder(requestId, placeholderAnswerId)
+          inFlight.completed = true
+          setRespondingFalse()
+          clearActiveStream(requestId)
+          return
+        }
 
-          const newAllConversations = produce(allConversations, (draft: any) => {
-            draft[0].name = newItem.name
-          })
-          setConversationList(newAllConversations as any)
+        inFlight.completed = true
+        const resolvedConversationId = inFlight.resolvedConversationId || tempNewConversationId
+        if (resolvedConversationId && !deletedConversationIdsRef.current.has(resolvedConversationId)) {
+          try {
+            const newItem: any = inFlight.sourceConversationId === '-1'
+              ? await generationConversationName(resolvedConversationId)
+              : null
+            const { data: allConversations }: any = await fetchConversations()
+            const visibleConversations = (allConversations || []).filter((item: ConversationItem) => !deletedConversationIdsRef.current.has(item.id))
+            const newAllConversations = produce(visibleConversations, (draft: any) => {
+              const current = draft.find((item: ConversationItem) => item.id === resolvedConversationId)
+              if (current && newItem?.name) { current.name = newItem.name }
+            })
+            setConversationList(newAllConversations as any)
+          }
+          catch {
+            const isNewConversationStream = inFlight.sourceConversationId === '-1'
+            upsertConversationInSidebar(
+              resolvedConversationId,
+              getConversationPreviewName(questionItem.content),
+              currInputs,
+              {
+                replaceName: isNewConversationStream,
+                removeNewPlaceholder: isNewConversationStream,
+              },
+            )
+          }
+        }
+
+        if (isViewingStream(requestId)) {
+          if (resolvedConversationId && getCurrConversationId() === '-1') { setCurrConversationId(resolvedConversationId, APP_ID, true) }
+          resetNewConversationInputs()
+          setChatNotStarted()
         }
         setConversationIdChangeBecauseOfNew(false)
-        resetNewConversationInputs()
-        setChatNotStarted()
-        setCurrConversationId(tempNewConversationId, APP_ID, true)
         setRespondingFalse()
+        clearActiveStream(requestId)
       },
       onFile(file) {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+
         const lastThought = responseItem.agent_thoughts?.[responseItem.agent_thoughts?.length - 1]
         if (lastThought) { lastThought.message_files = [...(lastThought as any).message_files, { ...file }] }
 
-        updateCurrentQA({
+        updateCachedQA({
+          requestId,
           responseItem,
           questionId,
           placeholderAnswerId,
@@ -539,6 +868,8 @@ const Main: FC<IMainProps> = () => {
         })
       },
       onThought(thought) {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+
         isAgentMode = true
         const response = responseItem as any
         if (thought.message_id && !hasSetResponseId) {
@@ -561,13 +892,10 @@ const Main: FC<IMainProps> = () => {
             responseItem.agent_thoughts!.push(thought)
           }
         }
-        // has switched to other conversation
-        if (prevTempNewConversationId !== getCurrConversationId()) {
-          setIsRespondingConCurrCon(false)
-          return false
-        }
+        if (!isViewingStream(requestId)) { setIsRespondingConCurrCon(false) }
 
-        updateCurrentQA({
+        updateCachedQA({
+          requestId,
           responseItem,
           questionId,
           placeholderAnswerId,
@@ -575,99 +903,99 @@ const Main: FC<IMainProps> = () => {
         })
       },
       onMessageEnd: (messageEnd) => {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+
         if (messageEnd.metadata?.annotation_reply) {
           responseItem.id = messageEnd.id
           responseItem.annotation = ({
             id: messageEnd.metadata.annotation_reply.id,
             authorName: messageEnd.metadata.annotation_reply.account.name,
           } as AnnotationType)
-          const newListWithAnswer = produce(
-            getChatList().filter(item => item.id !== responseItem.id && item.id !== placeholderAnswerId),
-            (draft) => {
-              if (!draft.find(item => item.id === questionId)) { draft.push({ ...questionItem }) }
-
-              draft.push({
-                ...responseItem,
-              })
-            },
-          )
-          setChatList(newListWithAnswer)
+          updateCachedQA({
+            requestId,
+            responseItem,
+            questionId,
+            placeholderAnswerId,
+            questionItem,
+          })
           return
         }
         // not support show citation
         // responseItem.citation = messageEnd.retriever_resources
-        const newListWithAnswer = produce(
-          getChatList().filter(item => item.id !== responseItem.id && item.id !== placeholderAnswerId),
-          (draft) => {
-            if (!draft.find(item => item.id === questionId)) { draft.push({ ...questionItem }) }
-
-            draft.push({ ...responseItem })
-          },
-        )
-        setChatList(newListWithAnswer)
+        updateCachedQA({
+          requestId,
+          responseItem,
+          questionId,
+          placeholderAnswerId,
+          questionItem,
+        })
       },
       onMessageReplace: (messageReplace) => {
-        setChatList(produce(
-          getChatList(),
-          (draft) => {
-            const current = draft.find(item => item.id === messageReplace.id)
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
 
-            if (current) { current.content = messageReplace.answer }
-          },
-        ))
+        updateCachedMessage(requestId, messageReplace.id, messageReplace.answer)
       },
       onError() {
+        removeCachedPlaceholder(requestId, placeholderAnswerId)
         setRespondingFalse()
-        // role back placeholder answer
-        setChatList(produce(getChatList(), (draft) => {
-          draft.splice(draft.findIndex(item => item.id === placeholderAnswerId), 1)
-        }))
+        clearActiveStream(requestId)
       },
       onWorkflowStarted: ({ workflow_run_id, task_id }) => {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+
         // taskIdRef.current = task_id
         responseItem.workflow_run_id = workflow_run_id
         responseItem.workflowProcess = {
           status: WorkflowRunningStatus.Running,
           tracing: [],
         }
-        setChatList(produce(getChatList(), (draft) => {
-          const currentIndex = draft.findIndex(item => item.id === responseItem.id)
-          draft[currentIndex] = {
-            ...draft[currentIndex],
-            ...responseItem,
-          }
-        }))
+        updateCachedQA({
+          requestId,
+          responseItem,
+          questionId,
+          placeholderAnswerId,
+          questionItem,
+        })
       },
       onWorkflowFinished: ({ data }) => {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+        if (!responseItem.workflowProcess) { return }
+
         responseItem.workflowProcess!.status = data.status as WorkflowRunningStatus
-        setChatList(produce(getChatList(), (draft) => {
-          const currentIndex = draft.findIndex(item => item.id === responseItem.id)
-          draft[currentIndex] = {
-            ...draft[currentIndex],
-            ...responseItem,
-          }
-        }))
+        updateCachedQA({
+          requestId,
+          responseItem,
+          questionId,
+          placeholderAnswerId,
+          questionItem,
+        })
       },
       onNodeStarted: ({ data }) => {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+        if (!responseItem.workflowProcess) { return }
+
         responseItem.workflowProcess!.tracing!.push(data as any)
-        setChatList(produce(getChatList(), (draft) => {
-          const currentIndex = draft.findIndex(item => item.id === responseItem.id)
-          draft[currentIndex] = {
-            ...draft[currentIndex],
-            ...responseItem,
-          }
-        }))
+        updateCachedQA({
+          requestId,
+          responseItem,
+          questionId,
+          placeholderAnswerId,
+          questionItem,
+        })
       },
       onNodeFinished: ({ data }) => {
+        if (inFlightConversationsRef.current[requestId]?.discarded) { return }
+        if (!responseItem.workflowProcess) { return }
+
         const currentIndex = responseItem.workflowProcess!.tracing!.findIndex(item => item.node_id === data.node_id)
-        responseItem.workflowProcess!.tracing[currentIndex] = data as any
-        setChatList(produce(getChatList(), (draft) => {
-          const currentIndex = draft.findIndex(item => item.id === responseItem.id)
-          draft[currentIndex] = {
-            ...draft[currentIndex],
-            ...responseItem,
-          }
-        }))
+        if (currentIndex >= 0) { responseItem.workflowProcess!.tracing[currentIndex] = data as any }
+        updateCachedQA({
+          requestId,
+          responseItem,
+          questionId,
+          placeholderAnswerId,
+          questionItem,
+        })
       },
     })
   }
@@ -704,13 +1032,16 @@ const Main: FC<IMainProps> = () => {
 
   if (!APP_ID || !APP_INFO || !promptConfig) { return <Loading type='app' /> }
 
+  const isVisibleConversationResponding = !!activeStreamRequestId && isViewingStream(activeStreamRequestId)
+  const isConversationSwitchGuard = pendingGeneratingNavigation?.type === 'conversation'
+
   return (
     <div className='flex h-dvh flex-col overflow-hidden bg-[#F7F4EF] text-[#1F2937]'>
       <Header
         title={APP_INFO.title}
         isMobile={isMobile}
         onShowSideBar={showSidebar}
-        onCreateNewChat={resetToNewSearch}
+        onCreateNewChat={requestNewConversation}
       />
       <div className="flex min-h-0 flex-1 rounded-t-[24px] bg-[#FBFAF8] overflow-hidden border-t border-[#E5DDD1] shadow-[0_-18px_48px_-36px_rgba(85,64,38,0.55)]">
         {/* sidebar */}
@@ -740,26 +1071,69 @@ const Main: FC<IMainProps> = () => {
           {
             hasSetInputs && (
               <div className='relative flex min-h-0 w-full max-w-[980px] grow flex-col mobile:w-full mx-auto px-0 pc:px-3 tablet:px-3'>
-                <Chat
-                  chatList={chatList}
-                  onSend={handleSend}
-                  onFeedback={handleFeedback}
-                  isResponding={isResponding}
-                  checkCanSend={checkCanSend}
-                  visionConfig={visionConfig}
-                  fileConfig={fileConfig}
-                  draftQuery={draftExampleQuery}
-                  draftQueryMode={draftQueryMode}
-                  onDraftConsumed={() => {
-                    setDraftExampleQuery('')
-                    setDraftQueryMode(null)
-                  }}
-                  onEditAndResend={handleEditAndResend}
-                />
+                {isLoadingConversation && chatList.length === 0
+                  ? (
+                    <div className='flex min-h-0 flex-1 items-center justify-center px-6 text-sm font-medium text-[#667085]'>
+                      Loading conversation...
+                    </div>
+                  )
+                  : (
+                    <Chat
+                      chatList={chatList}
+                      onSend={handleSend}
+                      onFeedback={handleFeedback}
+                      isResponding={isVisibleConversationResponding}
+                      checkCanSend={checkCanSend}
+                      visionConfig={visionConfig}
+                      fileConfig={fileConfig}
+                      draftQuery={draftExampleQuery}
+                      draftQueryMode={draftQueryMode}
+                      onDraftConsumed={() => {
+                        setDraftExampleQuery('')
+                        setDraftQueryMode(null)
+                      }}
+                      onEditAndResend={handleEditAndResend}
+                    />
+                  )}
               </div>)
           }
         </div>
       </div>
+      {pendingGeneratingNavigation && (
+        <div className='fixed inset-0 z-[70] flex items-center justify-center bg-[#1F2937]/30 px-4'>
+          <div
+            className='w-full max-w-md rounded-xl border border-[#E6DDD1] bg-[#FFFDF9] p-5 shadow-[0_24px_80px_-36px_rgba(31,41,55,0.65)]'
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='generating-navigation-title'
+          >
+            <div id='generating-navigation-title' className='text-base font-semibold text-[#1F2937]'>
+              Response is still generating
+            </div>
+            <p className='mt-2 text-sm leading-6 text-[#4B5563]'>
+              {isConversationSwitchGuard
+                ? 'Stay here, or discard the local response and open the selected conversation.'
+                : 'Stay on this conversation, or discard the local response and start a new conversation.'}
+            </p>
+            <div className='mt-5 flex flex-col-reverse gap-2 tablet:flex-row tablet:justify-end'>
+              <button
+                type='button'
+                className='rounded-lg border border-[#D7CDBF] bg-white px-4 py-2 text-sm font-semibold text-[#344054] hover:bg-[#F7F4EF] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
+                onClick={handleStayOnGeneratingConversation}
+              >
+                Stay
+              </button>
+              <button
+                type='button'
+                className='rounded-lg bg-[#725329] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F4522] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
+                onClick={handleConfirmGeneratingNavigation}
+              >
+                {isConversationSwitchGuard ? 'Discard and open conversation' : 'Discard and start new conversation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

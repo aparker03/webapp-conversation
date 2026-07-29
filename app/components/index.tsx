@@ -10,7 +10,7 @@ import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
 import { deleteConversation, fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, updateFeedback } from '@/service'
-import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
+import type { AppParameters, ChatItem, ConversationItem, Feedbacktype, PromptConfig, SpeechToTextConfig, TextToSpeechConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
 import Chat from '@/app/components/chat'
@@ -19,7 +19,7 @@ import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import Loading from '@/app/components/base/loading'
 import { replaceVarWithValues, userInputsFormToPromptVariables } from '@/utils/prompt'
 import AppUnavailable from '@/app/components/app-unavailable'
-import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
+import { APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 
@@ -46,7 +46,7 @@ const Main: FC<IMainProps> = () => {
   const { t } = useTranslation()
   const media = useBreakpoints()
   const isMobile = media === MediaType.mobile
-  const hasSetAppConfig = APP_ID && API_KEY
+  const hasSetAppConfig = !!APP_ID
 
   /*
   * app info
@@ -64,6 +64,8 @@ const Main: FC<IMainProps> = () => {
     transfer_methods: [TransferMethod.local_file],
   })
   const [fileConfig, setFileConfig] = useState<FileUpload | undefined>()
+  const [speechToTextConfig, setSpeechToTextConfig] = useState<SpeechToTextConfig>({ enabled: false })
+  const [textToSpeechConfig, setTextToSpeechConfig] = useState<TextToSpeechConfig>({ enabled: false })
 
   useEffect(() => {
     if (APP_INFO?.title) { document.title = `${APP_INFO.title} - Powered by Dify` }
@@ -86,7 +88,6 @@ const Main: FC<IMainProps> = () => {
     currConversationId,
     getCurrConversationId,
     setCurrConversationId,
-    getConversationIdFromStorage,
     isNewConversation,
     currConversationInfo,
     currInputs,
@@ -548,26 +549,23 @@ const Main: FC<IMainProps> = () => {
           throw new Error(error)
           return
         }
-        const _conversationId = getConversationIdFromStorage(APP_ID)
-        const currentConversation = conversations.find(item => item.id === _conversationId)
-        const isNotNewConversation = !!currentConversation
-
         // fetch new conversation info
-        const { user_input_form, opening_statement: introduction, file_upload, system_parameters, suggested_questions = [] }: any = appParams
+        const {
+          user_input_form,
+          opening_statement: introduction = '',
+          file_upload,
+          system_parameters,
+          suggested_questions = [],
+          speech_to_text,
+          text_to_speech,
+        } = appParams as AppParameters
         setLocaleOnClient(APP_INFO.default_language, true)
         setNewConversationInfo({
           name: t('app.chat.newChatDefaultName'),
           introduction,
           suggested_questions,
         })
-        if (isNotNewConversation) {
-          setExistConversationInfo({
-            name: currentConversation.name || t('app.chat.newChatDefaultName'),
-            introduction,
-            suggested_questions,
-          })
-        }
-        const prompt_variables = userInputsFormToPromptVariables(user_input_form)
+        const prompt_variables = userInputsFormToPromptVariables(user_input_form || [])
         setPromptConfig({
           prompt_template: promptTemplate,
           prompt_variables,
@@ -586,9 +584,14 @@ const Main: FC<IMainProps> = () => {
           number_limits: file_upload?.number_limits,
           fileUploadConfig: file_upload?.fileUploadConfig,
         })
+        setSpeechToTextConfig({ enabled: !!speech_to_text?.enabled })
+        setTextToSpeechConfig({
+          enabled: !!text_to_speech?.enabled,
+          voice: text_to_speech?.voice,
+          language: text_to_speech?.language,
+          autoPlay: text_to_speech?.autoPlay,
+        })
         setConversationList(conversations as ConversationItem[])
-
-        if (isNotNewConversation) { setCurrConversationId(_conversationId, APP_ID, false) }
 
         setInited(true)
       }
@@ -1086,6 +1089,9 @@ const Main: FC<IMainProps> = () => {
                       checkCanSend={checkCanSend}
                       visionConfig={visionConfig}
                       fileConfig={fileConfig}
+                      speechToTextConfig={speechToTextConfig}
+                      textToSpeechConfig={textToSpeechConfig}
+                      audioNavigationKey={currConversationId}
                       draftQuery={draftExampleQuery}
                       draftQueryMode={draftQueryMode}
                       onDraftConsumed={() => {

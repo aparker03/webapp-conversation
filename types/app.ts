@@ -20,6 +20,27 @@ export interface PromptConfig {
   prompt_variables: PromptVariable[]
 }
 
+export interface SpeechToTextConfig {
+  enabled: boolean
+}
+
+export interface TextToSpeechConfig {
+  enabled: boolean
+  voice?: string
+  language?: string
+  autoPlay?: string
+}
+
+export interface AppParameters {
+  user_input_form?: UserInputFormItem[]
+  opening_statement?: string
+  file_upload?: Record<string, any>
+  system_parameters?: Record<string, any>
+  suggested_questions?: string[]
+  speech_to_text?: SpeechToTextConfig
+  text_to_speech?: TextToSpeechConfig
+}
+
 export interface TextTypeFormItem {
   label: string
   variable: string

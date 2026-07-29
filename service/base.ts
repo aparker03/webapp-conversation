@@ -163,6 +163,10 @@ const getAnonymousUserId = () => {
   }
 }
 
+export const getAnonymousUserRequestHeaders = () => ({
+  [ANONYMOUS_USER_HEADER]: getAnonymousUserId(),
+})
+
 const withAnonymousUserHeader = (headers: Headers) => {
   headers.set(ANONYMOUS_USER_HEADER, getAnonymousUserId())
   return headers

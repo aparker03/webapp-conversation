@@ -1,11 +1,14 @@
+import 'server-only'
 import type { NextRequest } from 'next/server'
 import { ChatClient } from 'dify-client'
 import { v4 } from 'uuid'
-import { API_KEY, API_URL, APP_ID, APP_INFO } from '@/config'
+import { APP_ID, APP_INFO } from '@/config'
+import { getDifyConfig } from '@/app/api/utils/dify-config'
 
 const userPrefix = `user_${APP_ID}:`
 const anonymousUserHeader = 'x-accessfirst-anonymous-user-id'
 const anonymousUserPattern = /^af_[a-zA-Z0-9-]{8,80}$/
+const { appKey, apiUrl } = getDifyConfig()
 
 const getStableUserId = (request: NextRequest) => {
   const anonymousUserId = request.headers.get(anonymousUserHeader)
@@ -31,4 +34,15 @@ export const setSession = (sessionId: string) => {
   return { 'Set-Cookie': `session_id=${sessionId}` }
 }
 
-export const client = new ChatClient(API_KEY, API_URL || undefined)
+export const client = new ChatClient(appKey, apiUrl)
+
+export const difyFetch = (path: string, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers)
+  headers.set('Authorization', `Bearer ${appKey}`)
+
+  return fetch(`${apiUrl}/${path.replace(/^\/+/, '')}`, {
+    ...init,
+    cache: 'no-store',
+    headers,
+  })
+}

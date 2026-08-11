@@ -57,6 +57,7 @@ const Sidebar: FC<ISidebarProps> = ({
             = isCurrent ? ChatBubbleOvalLeftEllipsisSolidIcon : ChatBubbleOvalLeftEllipsisIcon
           const isSavedConversation = item.id !== '-1'
           const isConfirmingDelete = confirmingDeleteId === item.id
+          const conversationName = isSavedConversation ? item.name : t('app.accessFirst.sidebar.newConversation')
           return (
             <div key={item.id}>
               <div
@@ -69,7 +70,7 @@ const Sidebar: FC<ISidebarProps> = ({
                 )}
                 tabIndex={0}
                 role='button'
-                aria-label={t('app.accessFirst.sidebar.openConversation', { name: item.name })}
+                aria-label={t('app.accessFirst.sidebar.openConversation', { name: conversationName })}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
@@ -87,7 +88,7 @@ const Sidebar: FC<ISidebarProps> = ({
                   aria-hidden="true"
                 />
                 <span className='truncate'>
-                  {item.id === '-1' ? t('app.accessFirst.sidebar.newConversation') : item.name}
+                  {conversationName}
                 </span>
                 {isSavedConversation && (
                   <button

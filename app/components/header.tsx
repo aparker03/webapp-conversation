@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Bars3Icon,
   PencilSquareIcon,
@@ -17,6 +18,7 @@ const Header: FC<IHeaderProps> = ({
   onShowSideBar,
   onCreateNewChat,
 }) => {
+  const { t } = useTranslation()
   const handleButtonKeyDown = (event: React.KeyboardEvent<HTMLElement>, action?: () => void) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -31,7 +33,7 @@ const Header: FC<IHeaderProps> = ({
           <div
             role='button'
             tabIndex={0}
-            aria-label='Open conversation history'
+            aria-label={t('app.accessFirst.header.openHistory')}
             className='flex items-center justify-center h-9 w-9 cursor-pointer rounded-lg text-[#4B5563] hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#8A642F]/40'
             onClick={() => onShowSideBar?.()}
             onKeyDown={event => handleButtonKeyDown(event, onShowSideBar)}
@@ -42,14 +44,16 @@ const Header: FC<IHeaderProps> = ({
         : <div className='w-9'></div>}
       <button
         type='button'
-        aria-label='Start a new conversation'
+        aria-label={t('app.accessFirst.header.newConversation')}
         className='flex min-w-0 items-center space-x-3 rounded-lg px-2 py-1 text-left hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#8A642F]/40'
         onClick={() => onCreateNewChat?.()}
       >
         <AppIcon size="small" />
         <div className='min-w-0 leading-tight'>
           <div className="truncate text-sm font-semibold text-[#1F2937]">{title}</div>
-          <div className='hidden tablet:block truncate text-[11px] font-medium text-[#6B5A44]'>LA County behavioral health resource navigation</div>
+          <div className='hidden tablet:block truncate text-[11px] font-medium text-[#6B5A44]'>
+            {t('app.accessFirst.header.subtitle')}
+          </div>
         </div>
       </button>
       {isMobile
@@ -57,7 +61,7 @@ const Header: FC<IHeaderProps> = ({
           <div
             role='button'
             tabIndex={0}
-            aria-label='Start a new conversation'
+            aria-label={t('app.accessFirst.header.newConversation')}
             className='flex items-center justify-center h-9 w-9 cursor-pointer rounded-lg text-[#4B5563] hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#8A642F]/40'
             onClick={() => onCreateNewChat?.()}
             onKeyDown={event => handleButtonKeyDown(event, onCreateNewChat)}

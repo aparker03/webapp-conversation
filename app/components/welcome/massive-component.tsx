@@ -8,17 +8,17 @@ import {
 } from '@heroicons/react/24/solid'
 import s from './style.module.css'
 import type { AppInfo } from '@/types/app'
-import Button from '@/app/components/base/button'
 
 export const AppInfoComp: FC<{ siteInfo: AppInfo, onExampleSelect?: (example: string) => void }> = ({
   siteInfo,
   onExampleSelect,
 }) => {
+  const { t } = useTranslation()
   const examples = [
-    'Find Spanish-speaking mental health services near 90037',
-    'I have Medi-Cal and need therapy options near Long Beach',
-    'Show telehealth options for adults in Los Angeles County',
-    'I\'m uninsured and not sure where to start',
+    t('app.accessFirst.home.exampleOne'),
+    t('app.accessFirst.home.exampleTwo'),
+    t('app.accessFirst.home.exampleThree'),
+    t('app.accessFirst.home.exampleFour'),
   ]
 
   return (
@@ -29,39 +29,39 @@ export const AppInfoComp: FC<{ siteInfo: AppInfo, onExampleSelect?: (example: st
         </div>
         <div>
           <h1 className='text-2xl tablet:text-4xl font-semibold leading-tight text-[#152033]'>
-            Find the right starting point for care.
+            {t('app.accessFirst.home.title')}
           </h1>
           <p className='mt-3 max-w-3xl text-sm tablet:text-base leading-6 text-[#475467]'>
-            AccessFirst helps you look for Los Angeles County mental health resources by location, care type, language, accessibility need, telehealth preference, or insurance category.
+            {t('app.accessFirst.home.description')}
           </p>
         </div>
       </div>
 
       <div className='grid gap-3 tablet:grid-cols-3'>
         <div className='rounded-lg border border-[#E6DDD1] bg-white p-4 shadow-sm'>
-          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>Navigation only</div>
+          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>{t('app.accessFirst.home.navigationTitle')}</div>
           <p className='mt-2 text-sm leading-5 text-[#344054]'>
-            AccessFirst provides navigation support only. It does not provide diagnosis, therapy, emergency response, appointment booking, or insurance verification.
+            {t('app.accessFirst.home.navigationBody')}
           </p>
         </div>
         <div className='rounded-lg border border-[#E6DDD1] bg-white p-4 shadow-sm'>
-          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>Privacy</div>
+          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>{t('app.accessFirst.home.privacyTitle')}</div>
           <p className='mt-2 text-sm leading-5 text-[#344054]'>
-            Use general details only. Do not enter a full address, date of birth, member ID, or detailed medical history.
+            {t('app.accessFirst.home.privacyBody')}
           </p>
         </div>
         <div className='rounded-lg border border-[#E6DDD1] bg-white p-4 shadow-sm'>
-          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>Crisis support</div>
+          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>{t('app.accessFirst.home.crisisTitle')}</div>
           <p className='mt-2 text-sm leading-5 text-[#344054]'>
-            If there is immediate danger, call 911. For mental health crisis support, call or text 988.
+            {t('app.accessFirst.home.crisisBody')}
           </p>
         </div>
       </div>
 
       <div className='space-y-2'>
         <div>
-          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>Example searches</div>
-          <p className='mt-1 text-sm leading-5 text-[#475467]'>Use an example to start, then edit before sending.</p>
+          <div className='text-xs font-semibold uppercase tracking-[0.08em] text-[#725329]'>{t('app.accessFirst.home.examplesTitle')}</div>
+          <p className='mt-1 text-sm leading-5 text-[#475467]'>{t('app.accessFirst.home.examplesBody')}</p>
         </div>
         <div className='grid gap-2 tablet:grid-cols-2'>
           {examples.map(example => (
@@ -101,17 +101,22 @@ export const ChatBtn: FC<{ onClick: () => void, className?: string }> = ({
   className,
   onClick,
 }) => {
+  const { t } = useTranslation()
+
   return (
-    <Button
-      type='primary'
-      className={cn(className, `space-x-2 flex items-center ${s.customBtn}`)}
+    <button
+      type='button'
+      className={cn(
+        className,
+        `flex h-9 items-center justify-center space-x-2 px-4 py-2 text-base leading-5 text-white focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30 ${s.customBtn}`,
+      )}
       onClick={onClick}
     >
       <svg width="20" height="21" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path fillRule="evenodd" clipRule="evenodd" d="M18 10.5C18 14.366 14.418 17.5 10 17.5C8.58005 17.506 7.17955 17.1698 5.917 16.52L2 17.5L3.338 14.377C2.493 13.267 2 11.934 2 10.5C2 6.634 5.582 3.5 10 3.5C14.418 3.5 18 6.634 18 10.5ZM7 9.5H5V11.5H7V9.5ZM15 9.5H13V11.5H15V9.5ZM9 9.5H11V11.5H9V9.5Z" fill="white" />
       </svg>
-      Start navigation
-    </Button>
+      {t('app.accessFirst.home.startNavigation')}
+    </button>
   )
 }
 

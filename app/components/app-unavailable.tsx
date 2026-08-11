@@ -16,7 +16,7 @@ const AppUnavailable: FC<IAppUnavailableProps> = ({
   let message = errMessage
   if (!errMessage) {
     message = isUnknownReason
-      ? 'The app could not connect to its resource service. Please check the configuration or try again later.'
+      ? t('app.accessFirst.unavailable.body')
       : t('app.common.appUnavailable') as string
   }
 
@@ -30,7 +30,7 @@ const AppUnavailable: FC<IAppUnavailableProps> = ({
               borderRight: '1px solid #E6DDD1',
             }}>{(errMessage || isUnknownReason) ? 500 : 404}</h1>
           <div>
-            <div className='text-sm font-semibold text-[#1F2937]'>AccessFirst is temporarily unavailable</div>
+            <div className='text-sm font-semibold text-[#1F2937]'>{t('app.accessFirst.unavailable.title')}</div>
             <div className='mt-1 text-sm leading-5 text-[#475467]'>{message}</div>
           </div>
         </div>

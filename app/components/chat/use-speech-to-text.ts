@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { convertRecordingToWav, MAX_AUDIO_UPLOAD_BYTES, MAX_RECORDING_SECONDS, supportsAudioRecording } from './audio'
-import { transcribeAudio } from '@/service'
+import { AudioRequestError, transcribeAudio } from '@/service'
 
 export type SpeechToTextStatus = 'idle' | 'recording' | 'processing' | 'cancelled' | 'empty' | 'error'
 
@@ -15,14 +16,14 @@ const getRecordingMimeType = () => {
   return supportedTypes.find(type => MediaRecorder.isTypeSupported(type)) || ''
 }
 
-const getMicrophoneErrorMessage = (error: unknown) => {
+const getMicrophoneErrorKey = (error: unknown) => {
   if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) {
-    return 'Microphone permission was denied. Allow microphone access and try again.'
+    return 'app.accessFirst.audio.permissionDenied'
   }
   if (error instanceof DOMException && error.name === 'NotFoundError') {
-    return 'No microphone was found.'
+    return 'app.accessFirst.audio.noMicrophone'
   }
-  return 'AccessFirst could not start the microphone. Please try again.'
+  return 'app.accessFirst.audio.startMicrophoneFailed'
 }
 
 export const useSpeechToText = ({
@@ -34,8 +35,10 @@ export const useSpeechToText = ({
   navigationKey: string
   onTranscript: (transcript: string) => void
 }) => {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<SpeechToTextStatus>('idle')
-  const [message, setMessage] = useState('')
+  const [messageKey, setMessageKey] = useState('')
+  const [messageValues, setMessageValues] = useState<Record<string, number>>({})
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -61,7 +64,7 @@ export const useSpeechToText = ({
     streamRef.current = null
   }, [])
 
-  const discardActiveWork = useCallback((nextStatus: SpeechToTextStatus = 'idle', nextMessage = '') => {
+  const discardActiveWork = useCallback((nextStatus: SpeechToTextStatus = 'idle', nextMessageKey = '') => {
     operationRef.current += 1
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
@@ -82,14 +85,15 @@ export const useSpeechToText = ({
     stopTracks()
     setElapsedSeconds(0)
     setStatus(nextStatus)
-    setMessage(nextMessage)
+    setMessageKey(nextMessageKey)
+    setMessageValues({})
   }, [clearTimers, stopTracks])
 
   const processRecording = useCallback(async (recording: Blob, operation: number) => {
     try {
       if (!recording.size) {
         setStatus('empty')
-        setMessage('The recording was empty. Please try again.')
+        setMessageKey('app.accessFirst.audio.recordingEmpty')
         return
       }
 
@@ -98,12 +102,12 @@ export const useSpeechToText = ({
 
       if (!wav.size) {
         setStatus('empty')
-        setMessage('The recording was empty. Please try again.')
+        setMessageKey('app.accessFirst.audio.recordingEmpty')
         return
       }
       if (wav.size > MAX_AUDIO_UPLOAD_BYTES) {
         setStatus('error')
-        setMessage('The recording exceeds the 30 MB upload limit.')
+        setMessageKey('app.accessFirst.audio.recordingTooLarge')
         return
       }
 
@@ -115,21 +119,21 @@ export const useSpeechToText = ({
       abortControllerRef.current = null
       if (!transcript) {
         setStatus('empty')
-        setMessage('No speech was detected. Please try again.')
+        setMessageKey('app.accessFirst.audio.noSpeech')
         return
       }
 
       onTranscript(transcript)
       setStatus('idle')
-      setMessage('Transcript added. Review or edit it before sending.')
+      setMessageKey('app.accessFirst.audio.transcriptAdded')
     }
     catch (error) {
       if (operationRef.current !== operation || (error instanceof DOMException && error.name === 'AbortError')) { return }
 
       setStatus('error')
-      setMessage(error instanceof Error && error.message
-        ? error.message
-        : 'AccessFirst could not process that recording. Please try again.')
+      setMessageKey(error instanceof AudioRequestError
+        ? error.translationKey
+        : 'app.accessFirst.audio.processingFailed')
     }
   }, [onTranscript])
 
@@ -138,7 +142,7 @@ export const useSpeechToText = ({
     if (!recorder || recorder.state === 'inactive') { return }
 
     setStatus('processing')
-    setMessage('Converting and transcribing your recording…')
+    setMessageKey('app.accessFirst.audio.processing')
     clearTimers()
     recorder.stop()
     stopTracks()
@@ -148,7 +152,7 @@ export const useSpeechToText = ({
     if (!enabled) { return }
     if (!supportsAudioRecording()) {
       setStatus('error')
-      setMessage('Microphone recording is not supported in this browser.')
+      setMessageKey('app.accessFirst.audio.unsupportedBrowser')
       return
     }
 
@@ -172,7 +176,7 @@ export const useSpeechToText = ({
         if (event.data.size > 0) { chunksRef.current.push(event.data) }
       }
       recorder.onerror = () => {
-        discardActiveWork('error', 'The microphone recording failed. Please try again.')
+        discardActiveWork('error', 'app.accessFirst.audio.recordingFailed')
       }
       recorder.onstop = () => {
         const recording = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType })
@@ -182,7 +186,8 @@ export const useSpeechToText = ({
       }
 
       setStatus('recording')
-      setMessage(`Recording… maximum ${MAX_RECORDING_SECONDS} seconds.`)
+      setMessageKey('app.accessFirst.audio.recordingMaximum')
+      setMessageValues({ seconds: MAX_RECORDING_SECONDS })
       setElapsedSeconds(0)
       recorder.start(1000)
 
@@ -193,12 +198,12 @@ export const useSpeechToText = ({
       limitTimerRef.current = setTimeout(finishRecording, MAX_RECORDING_SECONDS * 1000)
     }
     catch (error) {
-      discardActiveWork('error', getMicrophoneErrorMessage(error))
+      discardActiveWork('error', getMicrophoneErrorKey(error))
     }
   }, [discardActiveWork, enabled, finishRecording, processRecording])
 
   const cancel = useCallback(() => {
-    discardActiveWork('cancelled', 'Recording cancelled.')
+    discardActiveWork('cancelled', 'app.accessFirst.audio.recordingCancelled')
   }, [discardActiveWork])
 
   useEffect(() => {
@@ -227,7 +232,7 @@ export const useSpeechToText = ({
 
   return {
     status,
-    message,
+    message: messageKey ? t(messageKey, messageValues) : '',
     elapsedSeconds,
     isSupported: supportsAudioRecording(),
     startRecording,

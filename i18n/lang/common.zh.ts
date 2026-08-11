@@ -14,9 +14,10 @@ const translation = {
     search: '搜索',
     send: '发送',
     lineBreak: '换行',
-    like: '赞同',
-    dislike: '反对',
+    like: '有帮助',
+    dislike: '没有帮助',
     ok: '好的',
+    or: '或',
   },
   imageUploader: {
     uploadFromComputer: '从本地上传',
@@ -27,6 +28,12 @@ const translation = {
     pasteImageLinkInputPlaceholder: '将图像链接粘贴到此处',
     pasteImageLinkInvalid: '图片链接无效',
     imageUpload: '图片上传',
+    chooseImage: '选择图片',
+    retryImage: '重试图片上传',
+    removeImage: '移除图片',
+    previewImage: '预览图片',
+    closePreview: '关闭图片预览',
+    previewAlt: '图片预览',
   },
   fileUploader: {
     uploadFromComputer: '从本地上传',
@@ -37,6 +44,11 @@ const translation = {
     uploadFromComputerLimit: '上传 {{type}} 不能超过 {{size}}',
     pasteFileLinkInvalid: '文件链接无效',
     fileExtensionNotSupport: '文件类型不支持',
+    chooseFile: '选择文件',
+    retryFile: '重试上传文件 {{name}}',
+    removeFile: '移除文件 {{name}}',
+    previewFile: '预览文件 {{name}}',
+    downloadFile: '下载文件 {{name}}',
   },
 }
 

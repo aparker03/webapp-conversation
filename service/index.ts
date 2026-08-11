@@ -66,13 +66,13 @@ export const deleteConversation = async (id: string) => {
   return del(`conversations/${id}`)
 }
 
-const getAudioApiError = async (response: Response, fallback: string) => {
-  try {
-    const data = await response.json() as { message?: unknown }
-    return typeof data.message === 'string' && data.message.trim() ? data.message : fallback
-  }
-  catch {
-    return fallback
+export class AudioRequestError extends Error {
+  translationKey: string
+
+  constructor(translationKey: string) {
+    super(translationKey)
+    this.name = 'AudioRequestError'
+    this.translationKey = translationKey
   }
 }
 
@@ -89,7 +89,7 @@ export const transcribeAudio = async (file: Blob, signal: AbortSignal) => {
   })
 
   if (!response.ok) {
-    throw new Error(await getAudioApiError(response, 'AccessFirst could not transcribe that recording. Please try again.'))
+    throw new AudioRequestError('app.accessFirst.audio.transcriptionFailed')
   }
 
   const data = await response.json() as { text?: unknown }
@@ -122,7 +122,7 @@ export const createSpeechAudio = async ({
   })
 
   if (!response.ok) {
-    throw new Error(await getAudioApiError(response, 'AccessFirst could not create audio for that response. Please try again.'))
+    throw new AudioRequestError('app.accessFirst.audio.creationFailed')
   }
 
   return response.blob()

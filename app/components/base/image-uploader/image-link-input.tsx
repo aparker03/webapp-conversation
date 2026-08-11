@@ -34,6 +34,7 @@ const ImageLinkInput: FC<ImageLinkInputProps> = ({
         value={imageLink}
         onChange={e => setImageLink(e.target.value)}
         placeholder={t('common.imageUploader.pasteImageLinkInputPlaceholder') || ''}
+        aria-label={t('common.imageUploader.pasteImageLink')}
       />
       <Button
         type='primary'

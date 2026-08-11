@@ -3,6 +3,7 @@ import { useStore } from './store'
 import type { FileUpload } from './types'
 import { FILE_EXTS } from './constants'
 import { SupportUploadFileTypes } from './types'
+import { useTranslation } from 'react-i18next'
 
 interface FileInputProps {
   fileConfig: FileUpload
@@ -10,6 +11,7 @@ interface FileInputProps {
 const FileInput = ({
   fileConfig,
 }: FileInputProps) => {
+  const { t } = useTranslation()
   const files = useStore(s => s.files)
   const { handleLocalFileUpload } = useFile(fileConfig)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +39,7 @@ const FileInput = ({
       className='absolute inset-0 block w-full cursor-pointer text-[0] opacity-0 disabled:cursor-not-allowed'
       onClick={e => ((e.target as HTMLInputElement).value = '')}
       type='file'
+      aria-label={t('common.fileUploader.chooseFile')}
       onChange={handleChange}
       accept={accept}
       disabled={!!(fileConfig.number_limits && files.length >= fileConfig?.number_limits)}

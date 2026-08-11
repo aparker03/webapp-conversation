@@ -89,6 +89,7 @@ const Uploader: FC<UploaderProps> = ({
         `}
         onClick={e => (e.target as HTMLInputElement).value = ''}
         type='file'
+        aria-label={t('common.imageUploader.chooseImage')}
         accept='.png, .jpg, .jpeg, .webp, .gif'
         onChange={handleChange}
         disabled={disabled}

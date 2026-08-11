@@ -54,7 +54,13 @@ const ImageList: FC<ImageListProps> = ({
                   >
                     {
                       item.progress === -1 && (
-                        <RefreshCcw01 className='w-5 h-5 text-white' onClick={() => onReUpload && onReUpload(item._id)} />
+                        <button
+                          type='button'
+                          aria-label={t('common.imageUploader.retryImage')}
+                          onClick={() => onReUpload && onReUpload(item._id)}
+                        >
+                          <RefreshCcw01 className='w-5 h-5 text-white' />
+                        </button>
                       )
                     }
                   </div>
@@ -89,15 +95,26 @@ const ImageList: FC<ImageListProps> = ({
             }
             <img
               className='w-16 h-16 rounded-lg object-cover cursor-pointer border-[0.5px] border-black/5'
-              alt=''
+              alt={t('common.imageUploader.previewAlt')}
+              role='button'
+              tabIndex={item.progress === 100 ? 0 : -1}
+              aria-label={t('common.imageUploader.previewImage')}
               onLoad={() => handleImageLinkLoadSuccess(item)}
               onError={() => handleImageLinkLoadError(item)}
               src={item.type === TransferMethod.remote_url ? item.url : item.base64Url}
               onClick={() => item.progress === 100 && setImagePreviewUrl((item.type === TransferMethod.remote_url ? item.url : item.base64Url) as string)}
+              onKeyDown={(event) => {
+                if (item.progress === 100 && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault()
+                  setImagePreviewUrl((item.type === TransferMethod.remote_url ? item.url : item.base64Url) as string)
+                }
+              }}
             />
             {
               !readonly && (
-                <div
+                <button
+                  type='button'
+                  aria-label={t('common.imageUploader.removeImage')}
                   className={`
                     absolute z-10 -top-[9px] -right-[9px] items-center justify-center w-[18px] h-[18px] 
                     bg-white hover:bg-gray-50 border-[0.5px] border-black/[0.02] rounded-2xl shadow-lg
@@ -107,7 +124,7 @@ const ImageList: FC<ImageListProps> = ({
                   onClick={() => onRemove && onRemove(item._id)}
                 >
                   <XClose className='w-3 h-3 text-gray-500' />
-                </div>
+                </button>
               )
             }
           </div>

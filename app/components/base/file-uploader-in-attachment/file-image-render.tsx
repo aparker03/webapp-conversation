@@ -1,4 +1,5 @@
 import cn from '@/utils/classnames'
+import { useTranslation } from 'react-i18next'
 
 interface FileImageRenderProps {
   imageUrl: string
@@ -16,11 +17,13 @@ const FileImageRender = ({
   onError,
   showDownloadAction,
 }: FileImageRenderProps) => {
+  const { t } = useTranslation()
+
   return (
     <div className={cn('border-[2px] border-effects-image-frame shadow-xs', className)}>
       <img
         className={cn('h-full w-full object-cover', showDownloadAction && 'cursor-pointer')}
-        alt={alt || 'Preview'}
+        alt={alt || t('common.imageUploader.previewAlt')}
         onLoad={onLoad}
         onError={onError}
         src={imageUrl}

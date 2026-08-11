@@ -31,7 +31,7 @@ const UploadOnlyFromLocal: FC<UploadOnlyFromLocalProps> = ({
             relative flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer
             ${hovering && 'bg-gray-100'}
           `}>
-            <ImagePlus className='w-4 h-4 text-gray-500' />
+            <ImagePlus className='w-4 h-4 text-gray-500' aria-hidden='true' />
           </div>
         )
       }
@@ -89,7 +89,7 @@ const UploaderButton: FC<UploaderButtonProps> = ({
               <>
                 <div className='flex items-center mt-2 px-2 text-xs font-medium text-gray-400'>
                   <div className='mr-3 w-[93px] h-[1px] bg-gradient-to-l from-[#F3F4F6]' />
-                  OR
+                  {t('common.operation.or')}
                   <div className='ml-3 w-[93px] h-[1px] bg-gradient-to-r from-[#F3F4F6]' />
                 </div>
                 <Uploader onUpload={handleUpload} limit={limit}>

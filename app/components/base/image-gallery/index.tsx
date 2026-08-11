@@ -2,6 +2,7 @@
 import type { FC } from 'react'
 import React, { useState } from 'react'
 import cn from 'classnames'
+import { useTranslation } from 'react-i18next'
 import s from './style.module.css'
 import ImagePreview from '@/app/components/base/image-uploader/image-preview'
 
@@ -30,6 +31,7 @@ const getWidthStyle = (imgNum: number) => {
 const ImageGallery: FC<Props> = ({
   srcs,
 }) => {
+  const { t } = useTranslation()
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
 
   const validSrcs = srcs.filter(src => src && src.trim() !== '')
@@ -46,7 +48,7 @@ const ImageGallery: FC<Props> = ({
           className={s.item}
           style={imgStyle}
           src={src}
-          alt=''
+          alt={t('common.imageUploader.previewAlt')}
           onClick={() => setImagePreviewUrl(src)}
         />
       ))}

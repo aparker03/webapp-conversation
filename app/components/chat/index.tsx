@@ -277,15 +277,15 @@ const Chat: FC<IChatProps> = ({
             {activeDraftMode === 'edit' && (
               <div className='mb-2 flex items-center justify-between gap-3 rounded-lg border border-[#DED2C1] bg-[#FFFDF9] px-3 py-2 text-sm text-[#344054] shadow-sm'>
                 <div>
-                  <span className='font-semibold text-[#725329]'>Editing a copy of a previous message.</span>
-                  <span className='ml-1 text-[#667085]'>Past responses will not change.</span>
+                  <span className='font-semibold text-[#725329]'>{t('app.accessFirst.chat.editingCopy')}</span>
+                  <span className='ml-1 text-[#667085]'>{t('app.accessFirst.chat.pastResponsesUnchanged')}</span>
                 </div>
                 <button
                   type='button'
                   className='shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
                   onClick={handleCancelDraft}
                 >
-                  Cancel
+                  {t('app.accessFirst.chat.cancel')}
                 </button>
               </div>
             )}
@@ -334,6 +334,7 @@ const Chat: FC<IChatProps> = ({
                 onChange={handleContentChange}
                 onKeyUp={handleKeyUp}
                 onKeyDown={handleKeyDown}
+                placeholder={t('app.accessFirst.chat.composerPlaceholder')}
                 autoSize
               />
               <div className="absolute bottom-2 right-3 flex items-center h-8">
@@ -344,12 +345,12 @@ const Chat: FC<IChatProps> = ({
                       type='button'
                       className={`flex h-8 w-8 items-center justify-center rounded-md text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30 disabled:cursor-wait disabled:opacity-60 ${speechToText.status === 'recording' ? 'bg-[#F3E8D6]' : ''}`}
                       aria-label={speechToText.status === 'recording'
-                        ? 'Finish microphone recording'
+                        ? t('app.accessFirst.audio.finishRecording')
                         : speechToText.status === 'processing'
-                          ? 'Processing microphone recording'
+                          ? t('app.accessFirst.audio.processingRecording')
                           : speechToText.isSupported
-                            ? 'Start microphone recording'
-                            : 'Microphone recording is not supported'}
+                            ? t('app.accessFirst.audio.startRecording')
+                            : t('app.accessFirst.audio.unsupportedRecording')}
                       aria-pressed={speechToText.status === 'recording'}
                       disabled={speechToText.status === 'processing'}
                       onClick={speechToText.status === 'recording'
@@ -365,8 +366,8 @@ const Chat: FC<IChatProps> = ({
                         type='button'
                         className='flex h-8 w-8 items-center justify-center rounded-md text-[#667085] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
                         aria-label={speechToText.status === 'recording'
-                          ? 'Cancel microphone recording'
-                          : 'Cancel transcription'}
+                          ? t('app.accessFirst.audio.cancelRecording')
+                          : t('app.accessFirst.audio.cancelTranscription')}
                         onClick={speechToText.cancel}
                       >
                         <XMarkIcon className='h-5 w-5' aria-hidden='true' />
@@ -386,7 +387,7 @@ const Chat: FC<IChatProps> = ({
                   <button
                     type='button'
                     className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30`}
-                    aria-label='Send message'
+                    aria-label={t('app.accessFirst.chat.sendMessage')}
                     onClick={handleSend}
                   />
                 </Tooltip>
@@ -399,7 +400,10 @@ const Chat: FC<IChatProps> = ({
                 aria-live='polite'
               >
                 {speechToText.status === 'recording'
-                  ? `Recording… ${speechToText.elapsedSeconds}s of 60s.`
+                  ? t('app.accessFirst.audio.recordingProgress', {
+                    elapsed: speechToText.elapsedSeconds,
+                    maximum: 60,
+                  })
                   : speechToText.message}
               </div>
             )}

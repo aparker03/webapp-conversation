@@ -1,15 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ChatItem } from '@/types/app'
-import { createSpeechAudio } from '@/service'
+import { AudioRequestError, createSpeechAudio } from '@/service'
 
 export type TextToSpeechStatus = 'idle' | 'loading' | 'playing' | 'error'
 
 export interface TextToSpeechState {
   messageId: string
   status: TextToSpeechStatus
-  message: string
+  messageKey: string
+  message?: string
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -23,10 +25,11 @@ export const useTextToSpeech = ({
   navigationKey: string
   voice?: string
 }) => {
+  const { t } = useTranslation()
   const [state, setState] = useState<TextToSpeechState>({
     messageId: '',
     status: 'idle',
-    message: '',
+    messageKey: '',
   })
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlRef = useRef('')
@@ -53,7 +56,7 @@ export const useTextToSpeech = ({
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
     releaseAudio()
-    setState({ messageId: '', status: 'idle', message: '' })
+    setState({ messageId: '', status: 'idle', messageKey: '' })
   }, [releaseAudio])
 
   const toggle = useCallback(async (item: ChatItem) => {
@@ -70,7 +73,7 @@ export const useTextToSpeech = ({
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
-    setState({ messageId: item.id, status: 'loading', message: 'Preparing audio…' })
+    setState({ messageId: item.id, status: 'loading', messageKey: 'app.accessFirst.audio.preparing' })
 
     try {
       const blob = await createSpeechAudio({
@@ -80,7 +83,7 @@ export const useTextToSpeech = ({
         signal: abortController.signal,
       })
       if (operationRef.current !== operation) { return }
-      if (!blob.size) { throw new Error('The audio response was empty.') }
+      if (!blob.size) { throw new AudioRequestError('app.accessFirst.audio.emptyResponse') }
 
       const objectUrl = URL.createObjectURL(blob)
       objectUrlRef.current = objectUrl
@@ -89,7 +92,7 @@ export const useTextToSpeech = ({
       audio.onended = () => {
         if (operationRef.current !== operation) { return }
         releaseAudio()
-        setState({ messageId: '', status: 'idle', message: '' })
+        setState({ messageId: '', status: 'idle', messageKey: '' })
       }
       audio.onerror = () => {
         if (operationRef.current !== operation) { return }
@@ -97,7 +100,7 @@ export const useTextToSpeech = ({
         setState({
           messageId: item.id,
           status: 'error',
-          message: 'The audio could not be played. Try again.',
+          messageKey: 'app.accessFirst.audio.playbackFailed',
         })
       }
 
@@ -108,7 +111,7 @@ export const useTextToSpeech = ({
       }
 
       abortControllerRef.current = null
-      setState({ messageId: item.id, status: 'playing', message: 'Playing response audio.' })
+      setState({ messageId: item.id, status: 'playing', messageKey: 'app.accessFirst.audio.playing' })
     }
     catch (error) {
       if (operationRef.current !== operation || (error instanceof DOMException && error.name === 'AbortError')) { return }
@@ -118,9 +121,9 @@ export const useTextToSpeech = ({
       setState({
         messageId: item.id,
         status: 'error',
-        message: error instanceof Error && error.message
-          ? error.message
-          : 'The audio could not be played. Try again.',
+        messageKey: error instanceof AudioRequestError
+          ? error.translationKey
+          : 'app.accessFirst.audio.playbackFailed',
       })
     }
   }, [enabled, releaseAudio, state.messageId, state.status, stop, voice])
@@ -137,7 +140,10 @@ export const useTextToSpeech = ({
   useEffect(() => stop, [stop])
 
   return {
-    state,
+    state: {
+      ...state,
+      message: state.messageKey ? t(state.messageKey) : '',
+    },
     toggle,
     stop,
   }

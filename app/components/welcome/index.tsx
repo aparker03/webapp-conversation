@@ -127,7 +127,7 @@ const Welcome: FC<IWelcomeProps> = ({
               <input
                 type="number"
                 className="block w-full p-2 text-[#1F2937] border border-[#E6DDD1] rounded-lg bg-white sm:text-xs focus:ring-[#8A642F]/25 focus:border-[#8A642F] "
-                placeholder={`${item.name}${!item.required ? `(${t('appDebug.variableTable.optional')})` : ''}`}
+                placeholder={`${item.name}${!item.required ? `(${t('app.variableTable.optional')})` : ''}`}
                 value={inputs[item.key]}
                 onChange={(e) => { onInputsChange({ ...inputs, [item.key]: e.target.value }) }}
               />

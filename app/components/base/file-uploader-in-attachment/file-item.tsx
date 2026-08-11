@@ -23,6 +23,7 @@ import { formatFileSize } from '@/utils/format'
 import cn from '@/utils/classnames'
 import ReplayLine from '@/app/components/base/icons/other/ReplayLine'
 import ImagePreview from '@/app/components/base/image-uploader/image-preview'
+import { useTranslation } from 'react-i18next'
 
 interface FileInAttachmentItemProps {
   file: FileEntity
@@ -40,6 +41,7 @@ const FileInAttachmentItem = ({
   onReUpload,
   canPreview,
 }: FileInAttachmentItemProps) => {
+  const { t } = useTranslation()
   const { id, name, type, progress, supportFileType, base64Url, url, isRemote } = file
   const ext = getFileExtension(name, type, isRemote)
   const isImageFile = supportFileType === SupportUploadFileTypes.image
@@ -106,6 +108,7 @@ const FileInAttachmentItem = ({
             progress === -1 && (
               <ActionButton
                 className='mr-1'
+                aria-label={t('common.fileUploader.retryFile', { name })}
                 onClick={() => onReUpload?.(id)}
               >
                 <ReplayLine className='h-4 w-4 text-text-tertiary' />
@@ -114,21 +117,28 @@ const FileInAttachmentItem = ({
           }
           {
             showDeleteAction && (
-              <ActionButton onClick={() => onRemove?.(id)}>
+              <ActionButton
+                aria-label={t('common.fileUploader.removeFile', { name })}
+                onClick={() => onRemove?.(id)}
+              >
                 <RiDeleteBinLine className='h-4 w-4' />
               </ActionButton>
             )
           }
           {
             canPreview && isImageFile && (
-              <ActionButton className='mr-1' onClick={() => setImagePreviewUrl(url || '')}>
+              <ActionButton
+                className='mr-1'
+                aria-label={t('common.fileUploader.previewFile', { name })}
+                onClick={() => setImagePreviewUrl(url || '')}
+              >
                 <RiEyeLine className='h-4 w-4' />
               </ActionButton>
             )
           }
           {
             showDownloadAction && (
-              <ActionButton onClick={(e) => {
+              <ActionButton aria-label={t('common.fileUploader.downloadFile', { name })} onClick={(e) => {
                 e.stopPropagation()
                 downloadFile(url || base64Url || '', name)
               }}>

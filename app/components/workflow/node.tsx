@@ -2,6 +2,7 @@
 import type { FC } from 'react'
 import { useEffect, useState } from 'react'
 import cn from 'classnames'
+import { useTranslation } from 'react-i18next'
 import BlockIcon from './block-icon'
 import AlertCircle from '@/app/components/base/icons/line/alert-circle'
 import AlertTriangle from '@/app/components/base/icons/line/alert-triangle'
@@ -15,6 +16,7 @@ interface Props {
 }
 
 const NodePanel: FC<Props> = ({ nodeInfo, hideInfo = false }) => {
+  const { t } = useTranslation()
   const [collapseState, setCollapseState] = useState<boolean>(true)
 
   const getTime = (time: number) => {
@@ -50,7 +52,9 @@ const NodePanel: FC<Props> = ({ nodeInfo, hideInfo = false }) => {
             hideInfo && '!text-xs',
           )} title={nodeInfo.title}>{nodeInfo.title}</div>
           {nodeInfo.status !== 'running' && !hideInfo && (
-            <div className='shrink-0 text-gray-500 text-xs leading-[18px]'>{`${getTime(nodeInfo.elapsed_time || 0)} · ${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} tokens`}</div>
+            <div className='shrink-0 text-gray-500 text-xs leading-[18px]'>
+              {`${getTime(nodeInfo.elapsed_time || 0)} · ${getTokenCount(nodeInfo.execution_metadata?.total_tokens || 0)} ${t('app.accessFirst.chat.tokens')}`}
+            </div>
           )}
           {nodeInfo.status === 'succeeded' && (
             <CheckCircle className='shrink-0 ml-2 w-3.5 h-3.5 text-[#12B76A]' />
@@ -64,7 +68,7 @@ const NodePanel: FC<Props> = ({ nodeInfo, hideInfo = false }) => {
           {nodeInfo.status === 'running' && (
             <div className='shrink-0 flex items-center text-primary-600 text-[13px] leading-[16px] font-medium'>
               <Loading02 className='mr-1 w-3.5 h-3.5 animate-spin' />
-              <span>Running</span>
+              <span>{t('app.accessFirst.chat.running')}</span>
             </div>
           )}
         </div>

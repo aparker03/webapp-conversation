@@ -14,9 +14,10 @@ const translation = {
     search: 'Search',
     send: 'Send',
     lineBreak: 'Line break',
-    like: 'like',
-    dislike: 'dislike',
+    like: 'Helpful',
+    dislike: 'Not helpful',
     ok: 'OK',
+    or: 'or',
   },
   imageUploader: {
     uploadFromComputer: 'Upload from Computer',
@@ -27,6 +28,12 @@ const translation = {
     pasteImageLinkInputPlaceholder: 'Paste image link here',
     pasteImageLinkInvalid: 'Invalid image link',
     imageUpload: 'Image Upload',
+    chooseImage: 'Choose an image',
+    retryImage: 'Retry image upload',
+    removeImage: 'Remove image',
+    previewImage: 'Preview image',
+    closePreview: 'Close image preview',
+    previewAlt: 'Image preview',
   },
   fileUploader: {
     uploadFromComputer: 'Local upload',
@@ -37,6 +44,11 @@ const translation = {
     uploadFromComputerLimit: 'Upload {{type}} cannot exceed {{size}}',
     pasteFileLinkInvalid: 'Invalid file link',
     fileExtensionNotSupport: 'File extension not supported',
+    chooseFile: 'Choose a file',
+    retryFile: 'Retry file upload for {{name}}',
+    removeFile: 'Remove file {{name}}',
+    previewFile: 'Preview file {{name}}',
+    downloadFile: 'Download file {{name}}',
   },
 }
 

@@ -4,11 +4,15 @@ import React, { useEffect, useRef } from 'react'
 import cn from 'classnames'
 import { useTranslation } from 'react-i18next'
 import Textarea from 'rc-textarea'
+import type { TextAreaRef } from 'rc-textarea'
+import { MicrophoneIcon, StopCircleIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import s from './style.module.css'
 import Answer from './answer'
 import Question from './question'
+import { useSpeechToText } from './use-speech-to-text'
+import { useTextToSpeech } from './use-text-to-speech'
 import type { FeedbackFunc } from './type'
-import type { ChatItem, VisionFile, VisionSettings } from '@/types/app'
+import type { ChatItem, SpeechToTextConfig, TextToSpeechConfig, VisionFile, VisionSettings } from '@/types/app'
 import { TransferMethod } from '@/types/app'
 import Tooltip from '@/app/components/base/tooltip'
 import Toast from '@/app/components/base/toast'
@@ -42,6 +46,9 @@ export interface IChatProps {
   draftQueryMode?: 'example' | 'edit' | null
   onDraftConsumed?: () => void
   onEditAndResend?: (message: string) => void
+  speechToTextConfig?: SpeechToTextConfig
+  textToSpeechConfig?: TextToSpeechConfig
+  audioNavigationKey: string
 }
 
 const Chat: FC<IChatProps> = ({
@@ -60,6 +67,9 @@ const Chat: FC<IChatProps> = ({
   draftQueryMode,
   onDraftConsumed,
   onEditAndResend,
+  speechToTextConfig,
+  textToSpeechConfig,
+  audioNavigationKey,
 }) => {
   const { t } = useTranslation()
   const { notify } = Toast
@@ -69,8 +79,30 @@ const Chat: FC<IChatProps> = ({
   const [activeDraftMode, setActiveDraftMode] = React.useState<'example' | 'edit' | null>(null)
   const [activeResendMessageId, setActiveResendMessageId] = React.useState('')
   const queryRef = useRef('')
-  const textareaRef = useRef<{ focus?: () => void } | HTMLTextAreaElement | null>(null)
+  const textareaRef = useRef<TextAreaRef>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const handleTranscript = React.useCallback((transcript: string) => {
+    const currentQuery = queryRef.current
+    const separator = currentQuery && !/\s$/.test(currentQuery) ? ' ' : ''
+    const nextQuery = `${currentQuery}${separator}${transcript}`
+    setQuery(nextQuery)
+    queryRef.current = nextQuery
+    setActiveDraftMode(null)
+    setActiveResendMessageId('')
+    textareaRef.current?.focus()
+  }, [])
+
+  const speechToText = useSpeechToText({
+    enabled: !!speechToTextConfig?.enabled,
+    navigationKey: audioNavigationKey,
+    onTranscript: handleTranscript,
+  })
+  const textToSpeech = useTextToSpeech({
+    enabled: !!textToSpeechConfig?.enabled,
+    navigationKey: audioNavigationKey,
+    voice: textToSpeechConfig?.voice,
+  })
 
   const handleContentChange = (e: any) => {
     const value = e.target.value
@@ -220,6 +252,9 @@ const Chat: FC<IChatProps> = ({
               onFeedback={onFeedback}
               isResponding={isRespondingAnswer}
               suggestionClick={suggestionClick}
+              textToSpeechEnabled={!!textToSpeechConfig?.enabled}
+              textToSpeechState={textToSpeech.state}
+              onToggleTextToSpeech={textToSpeech.toggle}
             />
           }
           return (
@@ -242,15 +277,15 @@ const Chat: FC<IChatProps> = ({
             {activeDraftMode === 'edit' && (
               <div className='mb-2 flex items-center justify-between gap-3 rounded-lg border border-[#DED2C1] bg-[#FFFDF9] px-3 py-2 text-sm text-[#344054] shadow-sm'>
                 <div>
-                  <span className='font-semibold text-[#725329]'>Editing a copy of a previous message.</span>
-                  <span className='ml-1 text-[#667085]'>Past responses will not change.</span>
+                  <span className='font-semibold text-[#725329]'>{t('app.accessFirst.chat.editingCopy')}</span>
+                  <span className='ml-1 text-[#667085]'>{t('app.accessFirst.chat.pastResponsesUnchanged')}</span>
                 </div>
                 <button
                   type='button'
                   className='shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
                   onClick={handleCancelDraft}
                 >
-                  Cancel
+                  {t('app.accessFirst.chat.cancel')}
                 </button>
               </div>
             )}
@@ -292,17 +327,54 @@ const Chat: FC<IChatProps> = ({
               <Textarea
                 ref={textareaRef}
                 className={`
-                  block w-full px-2 pr-[118px] py-[9px] leading-6 max-h-none text-base text-[#1F2937] placeholder:text-[#667085] outline-none appearance-none resize-none
+                  block w-full px-2 pr-[176px] py-[9px] leading-6 max-h-none text-base text-[#1F2937] placeholder:text-[#667085] outline-none appearance-none resize-none
                   ${visionConfig?.enabled && 'pl-12'}
                 `}
                 value={query}
                 onChange={handleContentChange}
                 onKeyUp={handleKeyUp}
                 onKeyDown={handleKeyDown}
+                placeholder={t('app.accessFirst.chat.composerPlaceholder')}
                 autoSize
               />
-              <div className="absolute bottom-2 right-6 flex items-center h-8">
+              <div className="absolute bottom-2 right-3 flex items-center h-8">
                 <div className={`${s.count} mr-3 h-5 leading-5 text-xs bg-[#F7F4EF] text-[#667085] px-2 rounded`}>{query.trim().length}</div>
+                {speechToTextConfig?.enabled && (
+                  <div className='mr-1 flex items-center gap-1'>
+                    <button
+                      type='button'
+                      className={`flex h-8 w-8 items-center justify-center rounded-md text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30 disabled:cursor-wait disabled:opacity-60 ${speechToText.status === 'recording' ? 'bg-[#F3E8D6]' : ''}`}
+                      aria-label={speechToText.status === 'recording'
+                        ? t('app.accessFirst.audio.finishRecording')
+                        : speechToText.status === 'processing'
+                          ? t('app.accessFirst.audio.processingRecording')
+                          : speechToText.isSupported
+                            ? t('app.accessFirst.audio.startRecording')
+                            : t('app.accessFirst.audio.unsupportedRecording')}
+                      aria-pressed={speechToText.status === 'recording'}
+                      disabled={speechToText.status === 'processing'}
+                      onClick={speechToText.status === 'recording'
+                        ? speechToText.finishRecording
+                        : speechToText.startRecording}
+                    >
+                      {speechToText.status === 'recording'
+                        ? <StopCircleIcon className='h-5 w-5' aria-hidden='true' />
+                        : <MicrophoneIcon className='h-5 w-5' aria-hidden='true' />}
+                    </button>
+                    {(speechToText.status === 'recording' || speechToText.status === 'processing') && (
+                      <button
+                        type='button'
+                        className='flex h-8 w-8 items-center justify-center rounded-md text-[#667085] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
+                        aria-label={speechToText.status === 'recording'
+                          ? t('app.accessFirst.audio.cancelRecording')
+                          : t('app.accessFirst.audio.cancelTranscription')}
+                        onClick={speechToText.cancel}
+                      >
+                        <XMarkIcon className='h-5 w-5' aria-hidden='true' />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <Tooltip
                   selector='send-tip'
                   htmlContent={
@@ -312,11 +384,29 @@ const Chat: FC<IChatProps> = ({
                     </div>
                   }
                 >
-                  {/* TODO: Replace this clickable div with a real button in a focused accessibility pass. */}
-                  <div className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md`} onClick={handleSend}></div>
+                  <button
+                    type='button'
+                    className={`${s.sendBtn} w-8 h-8 cursor-pointer rounded-md focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30`}
+                    aria-label={t('app.accessFirst.chat.sendMessage')}
+                    onClick={handleSend}
+                  />
                 </Tooltip>
               </div>
             </div>
+            {speechToTextConfig?.enabled && speechToText.message && (
+              <div
+                className={`mt-1 px-2 text-xs ${speechToText.status === 'error' ? 'text-red-700' : 'text-[#667085]'}`}
+                role='status'
+                aria-live='polite'
+              >
+                {speechToText.status === 'recording'
+                  ? t('app.accessFirst.audio.recordingProgress', {
+                    elapsed: speechToText.elapsedSeconds,
+                    maximum: 60,
+                  })
+                  : speechToText.message}
+              </div>
+            )}
           </div>
         )
       }

@@ -1,13 +1,28 @@
 import { API_PREFIX } from '@/config'
 import Toast from '@/app/components/base/toast'
+import i18n from '@/i18n/i18next-config'
 import type { AnnotationReply, MessageEnd, MessageReplace, ThoughtItem } from '@/app/components/chat/type'
 import type { VisionFile } from '@/types/app'
 
 const TIME_OUT = 100000
 const ANONYMOUS_USER_STORAGE_KEY = 'accessfirst_anonymous_user_id'
 const ANONYMOUS_USER_HEADER = 'x-accessfirst-anonymous-user-id'
-const ACCESSFIRST_SERVICE_ERROR_MESSAGE = 'AccessFirst could not connect to its resource service. Please check the app configuration or try again later.'
-const TECHNICAL_ERROR_PATTERN = /(connect\s|EACCES|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|fetch failed|Failed to fetch|NetworkError|AxiosError|https?:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|:\d{2,5}\b|stack trace)/i
+const TECHNICAL_ERROR_PATTERN = /(connect\s|EACCES|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|fetch failed|Failed to fetch|NetworkError|Network response|AxiosError|https?:\/\/|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b|:\d{2,5}\b|stack trace)/i
+const API_ERROR_TRANSLATION_KEYS: Record<string, string> = {
+  'AccessFirst could not connect to its resource service. Please check the app configuration or try again later.': 'app.accessFirst.errors.serviceUnavailable',
+  'AccessFirst could not load this conversation. Please try again later.': 'app.accessFirst.errors.loadConversation',
+  'AccessFirst could not delete this conversation. Please try again later.': 'app.accessFirst.errors.deleteConversation',
+  'AccessFirst could not send that message. Please try again later.': 'app.accessFirst.errors.sendMessage',
+  'AccessFirst could not upload that file. Please try again later.': 'app.accessFirst.errors.uploadFile',
+  'AccessFirst could not load its application settings. Please try again later.': 'app.accessFirst.errors.loadSettings',
+  'AccessFirst could not update the conversation name. Please try again later.': 'app.accessFirst.errors.updateConversationName',
+  'AccessFirst could not save that feedback. Please try again later.': 'app.accessFirst.errors.saveFeedback',
+  'There is no response text to play.': 'app.accessFirst.errors.noResponseText',
+  'Choose a recording to transcribe.': 'app.accessFirst.errors.chooseRecording',
+  'The recording was empty.': 'app.accessFirst.errors.recordingEmpty',
+  'The recording exceeds the 30 MB upload limit.': 'app.accessFirst.errors.recordingTooLarge',
+  'The recording could not be converted to WAV.': 'app.accessFirst.errors.wavConversion',
+}
 
 const ContentType = {
   json: 'application/json',
@@ -163,21 +178,30 @@ const getAnonymousUserId = () => {
   }
 }
 
+export const getAnonymousUserRequestHeaders = () => ({
+  [ANONYMOUS_USER_HEADER]: getAnonymousUserId(),
+})
+
 const withAnonymousUserHeader = (headers: Headers) => {
   headers.set(ANONYMOUS_USER_HEADER, getAnonymousUserId())
   return headers
 }
 
-const getPublicErrorMessage = (error: unknown, fallback = 'Server Error') => {
+const translate = (key: string) => i18n.t(key) as string
+
+const getPublicErrorMessage = (error: unknown, fallbackKey = 'app.accessFirst.errors.serverError') => {
   const message = (() => {
     if (typeof error === 'string') { return error }
     if (error && typeof error === 'object' && 'message' in error) { return String((error as { message?: unknown }).message || '') }
-    if (error === undefined || error === null) { return fallback }
+    if (error === undefined || error === null) { return translate(fallbackKey) }
     return String(error)
   })()
 
-  if (!message.trim()) { return fallback }
-  if (TECHNICAL_ERROR_PATTERN.test(message)) { return ACCESSFIRST_SERVICE_ERROR_MESSAGE }
+  if (!message.trim()) { return translate(fallbackKey) }
+
+  const translationKey = API_ERROR_TRANSLATION_KEYS[message.trim()]
+  if (translationKey) { return translate(translationKey) }
+  if (TECHNICAL_ERROR_PATTERN.test(message)) { return translate('app.accessFirst.errors.serviceUnavailable') }
 
   return message
 }
@@ -330,7 +354,7 @@ const baseFetch = (url: string, fetchOptions: any, { needAllResponseContent }: I
               const bodyJson = res.json()
               switch (res.status) {
                 case 401: {
-                  Toast.notify({ type: 'error', message: 'Invalid token' })
+                  Toast.notify({ type: 'error', message: translate('app.accessFirst.errors.invalidToken') })
                   return
                 }
                 default:
@@ -437,7 +461,7 @@ export const ssePost = (
             Toast.notify({ type: 'error', message: getPublicErrorMessage(data?.message) })
           })
         })
-        onError?.('Server Error')
+        onError?.(translate('app.accessFirst.errors.serverError'))
         return
       }
       return handleStream(res, (str: string, isFirstMessage: boolean, moreInfo: IOnDataMoreInfo) => {

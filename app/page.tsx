@@ -1,15 +1,14 @@
-import type { FC } from 'react'
 import React from 'react'
 
-import type { IMainProps } from '@/app/components'
 import Main from '@/app/components'
+import { getLocaleOnServer } from '@/i18n/server'
 
-const App: FC<IMainProps> = ({
-  params,
-}: any) => {
+const App = async () => {
+  const initialLocale = await getLocaleOnServer()
+
   return (
-    <Main params={params} />
+    <Main initialLocale={initialLocale} />
   )
 }
 
-export default React.memo(App)
+export default App

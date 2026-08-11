@@ -1,6 +1,6 @@
 'use client'
 import type { FC } from 'react'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import produce, { setAutoFreeze } from 'immer'
 import { useBoolean, useGetState } from 'ahooks'
@@ -10,21 +10,22 @@ import Sidebar from '@/app/components/sidebar'
 import ConfigSence from '@/app/components/config-scence'
 import Header from '@/app/components/header'
 import { deleteConversation, fetchAppParams, fetchChatList, fetchConversations, generationConversationName, sendChatMessage, updateFeedback } from '@/service'
-import type { ChatItem, ConversationItem, Feedbacktype, PromptConfig, VisionFile, VisionSettings } from '@/types/app'
+import type { AppParameters, ChatItem, ConversationItem, Feedbacktype, PromptConfig, SpeechToTextConfig, TextToSpeechConfig, VisionFile, VisionSettings } from '@/types/app'
 import type { FileUpload } from '@/app/components/base/file-uploader-in-attachment/types'
 import { Resolution, TransferMethod, WorkflowRunningStatus } from '@/types/app'
 import Chat from '@/app/components/chat'
-import { setLocaleOnClient } from '@/i18n/client'
+import { changeLanguage } from '@/i18n/i18next-config'
+import type { Locale } from '@/i18n'
 import useBreakpoints, { MediaType } from '@/hooks/use-breakpoints'
 import Loading from '@/app/components/base/loading'
 import { replaceVarWithValues, userInputsFormToPromptVariables } from '@/utils/prompt'
 import AppUnavailable from '@/app/components/app-unavailable'
-import { API_KEY, APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
+import { APP_ID, APP_INFO, isShowPrompt, promptTemplate } from '@/config'
 import type { Annotation as AnnotationType } from '@/types/log'
 import { addFileInfos, sortAgentSorts } from '@/utils/tools'
 
 export interface IMainProps {
-  params: any
+  initialLocale: Locale
 }
 
 interface InFlightConversation {
@@ -42,11 +43,11 @@ interface PendingGeneratingNavigation {
   conversationId?: string
 }
 
-const Main: FC<IMainProps> = () => {
-  const { t } = useTranslation()
+const Main: FC<IMainProps> = ({ initialLocale }) => {
+  const { t, i18n } = useTranslation()
   const media = useBreakpoints()
   const isMobile = media === MediaType.mobile
-  const hasSetAppConfig = APP_ID && API_KEY
+  const hasSetAppConfig = !!APP_ID
 
   /*
   * app info
@@ -64,10 +65,19 @@ const Main: FC<IMainProps> = () => {
     transfer_methods: [TransferMethod.local_file],
   })
   const [fileConfig, setFileConfig] = useState<FileUpload | undefined>()
+  const [speechToTextConfig, setSpeechToTextConfig] = useState<SpeechToTextConfig>({ enabled: false })
+  const [textToSpeechConfig, setTextToSpeechConfig] = useState<TextToSpeechConfig>({ enabled: false })
+
+  useLayoutEffect(() => {
+    void changeLanguage(initialLocale)
+    document.documentElement.lang = initialLocale
+  }, [initialLocale])
 
   useEffect(() => {
-    if (APP_INFO?.title) { document.title = `${APP_INFO.title} - Powered by Dify` }
-  }, [APP_INFO?.title])
+    if (APP_INFO?.title) {
+      document.title = t('app.accessFirst.meta.documentTitle', { title: APP_INFO.title })
+    }
+  }, [i18n.language, t])
 
   // onData change thought (the produce obj). https://github.com/immerjs/immer/issues/576
   useEffect(() => {
@@ -86,7 +96,6 @@ const Main: FC<IMainProps> = () => {
     currConversationId,
     getCurrConversationId,
     setCurrConversationId,
-    getConversationIdFromStorage,
     isNewConversation,
     currConversationInfo,
     currInputs,
@@ -155,7 +164,9 @@ const Main: FC<IMainProps> = () => {
     return isChatStarted
   })()
 
-  const conversationName = currConversationInfo?.name || t('app.chat.newChatDefaultName') as string
+  const conversationName = isNewConversation
+    ? t('app.accessFirst.sidebar.newConversation')
+    : currConversationInfo?.name || t('app.accessFirst.sidebar.newConversation') as string
   const conversationIntroduction = currConversationInfo?.introduction || ''
   const suggestedQuestions = currConversationInfo?.suggested_questions || []
 
@@ -210,7 +221,7 @@ const Main: FC<IMainProps> = () => {
         if (fetchConversationTokenRef.current !== fetchToken || getCurrConversationId() !== selectedConversationId) { return }
 
         setChatList([])
-        notify({ type: 'error', message: 'AccessFirst could not load this conversation. Please try again later.' })
+        notify({ type: 'error', message: t('app.accessFirst.errors.loadConversation') })
       }).finally(() => {
         if (fetchConversationTokenRef.current === fetchToken && getCurrConversationId() === selectedConversationId) { setIsLoadingConversation(false) }
       })
@@ -283,11 +294,11 @@ const Main: FC<IMainProps> = () => {
         setIsLoadingConversation(false)
       }
 
-      notify({ type: 'success', message: 'Conversation deleted.' })
+      notify({ type: 'success', message: t('app.accessFirst.errors.conversationDeleted') })
       hideSidebar()
     }
     catch {
-      notify({ type: 'error', message: 'AccessFirst could not delete this conversation. Please try again later.' })
+      notify({ type: 'error', message: t('app.accessFirst.errors.deleteConversation') })
     }
   }
 
@@ -544,30 +555,25 @@ const Main: FC<IMainProps> = () => {
         // handle current conversation id
         const { data: conversations, error } = conversationData as { data: ConversationItem[], error: string }
         if (error) {
-          Toast.notify({ type: 'error', message: error })
+          Toast.notify({ type: 'error', message: t('app.accessFirst.errors.serviceUnavailable') })
           throw new Error(error)
-          return
         }
-        const _conversationId = getConversationIdFromStorage(APP_ID)
-        const currentConversation = conversations.find(item => item.id === _conversationId)
-        const isNotNewConversation = !!currentConversation
-
         // fetch new conversation info
-        const { user_input_form, opening_statement: introduction, file_upload, system_parameters, suggested_questions = [] }: any = appParams
-        setLocaleOnClient(APP_INFO.default_language, true)
+        const {
+          user_input_form,
+          opening_statement: introduction = '',
+          file_upload,
+          system_parameters,
+          suggested_questions = [],
+          speech_to_text,
+          text_to_speech,
+        } = appParams as AppParameters
         setNewConversationInfo({
-          name: t('app.chat.newChatDefaultName'),
+          name: t('app.accessFirst.sidebar.newConversation'),
           introduction,
           suggested_questions,
         })
-        if (isNotNewConversation) {
-          setExistConversationInfo({
-            name: currentConversation.name || t('app.chat.newChatDefaultName'),
-            introduction,
-            suggested_questions,
-          })
-        }
-        const prompt_variables = userInputsFormToPromptVariables(user_input_form)
+        const prompt_variables = userInputsFormToPromptVariables(user_input_form || [])
         setPromptConfig({
           prompt_template: promptTemplate,
           prompt_variables,
@@ -586,9 +592,14 @@ const Main: FC<IMainProps> = () => {
           number_limits: file_upload?.number_limits,
           fileUploadConfig: file_upload?.fileUploadConfig,
         })
+        setSpeechToTextConfig({ enabled: !!speech_to_text?.enabled })
+        setTextToSpeechConfig({
+          enabled: !!text_to_speech?.enabled,
+          voice: text_to_speech?.voice,
+          language: text_to_speech?.language,
+          autoPlay: text_to_speech?.autoPlay,
+        })
         setConversationList(conversations as ConversationItem[])
-
-        if (isNotNewConversation) { setCurrConversationId(_conversationId, APP_ID, false) }
 
         setInited(true)
       }
@@ -1012,7 +1023,7 @@ const Main: FC<IMainProps> = () => {
       return item
     })
     setChatList(newChatList)
-    notify({ type: 'success', message: t('common.api.success') })
+    notify({ type: 'success', message: t('app.accessFirst.feedback.saved') })
   }
 
   const renderSidebar = () => {
@@ -1028,7 +1039,14 @@ const Main: FC<IMainProps> = () => {
     )
   }
 
-  if (appUnavailable) { return <AppUnavailable isUnknownReason={isUnknownReason} errMessage={!hasSetAppConfig ? 'AccessFirst is missing required app configuration.' : ''} /> }
+  if (appUnavailable) {
+    return (
+      <AppUnavailable
+        isUnknownReason={isUnknownReason}
+        errMessage={!hasSetAppConfig ? t('app.accessFirst.unavailable.missingConfiguration') : ''}
+      />
+    )
+  }
 
   if (!APP_ID || !APP_INFO || !promptConfig) { return <Loading type='app' /> }
 
@@ -1074,7 +1092,7 @@ const Main: FC<IMainProps> = () => {
                 {isLoadingConversation && chatList.length === 0
                   ? (
                     <div className='flex min-h-0 flex-1 items-center justify-center px-6 text-sm font-medium text-[#667085]'>
-                      Loading conversation...
+                      {t('app.accessFirst.chat.loadingConversation')}
                     </div>
                   )
                   : (
@@ -1086,6 +1104,9 @@ const Main: FC<IMainProps> = () => {
                       checkCanSend={checkCanSend}
                       visionConfig={visionConfig}
                       fileConfig={fileConfig}
+                      speechToTextConfig={speechToTextConfig}
+                      textToSpeechConfig={textToSpeechConfig}
+                      audioNavigationKey={currConversationId}
                       draftQuery={draftExampleQuery}
                       draftQueryMode={draftQueryMode}
                       onDraftConsumed={() => {
@@ -1108,12 +1129,12 @@ const Main: FC<IMainProps> = () => {
             aria-labelledby='generating-navigation-title'
           >
             <div id='generating-navigation-title' className='text-base font-semibold text-[#1F2937]'>
-              Response is still generating
+              {t('app.accessFirst.chat.responseGenerating')}
             </div>
             <p className='mt-2 text-sm leading-6 text-[#4B5563]'>
               {isConversationSwitchGuard
-                ? 'Stay here, or discard the local response and open the selected conversation.'
-                : 'Stay on this conversation, or discard the local response and start a new conversation.'}
+                ? t('app.accessFirst.chat.stayOrOpen')
+                : t('app.accessFirst.chat.stayOrNew')}
             </p>
             <div className='mt-5 flex flex-col-reverse gap-2 tablet:flex-row tablet:justify-end'>
               <button
@@ -1121,14 +1142,16 @@ const Main: FC<IMainProps> = () => {
                 className='rounded-lg border border-[#D7CDBF] bg-white px-4 py-2 text-sm font-semibold text-[#344054] hover:bg-[#F7F4EF] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
                 onClick={handleStayOnGeneratingConversation}
               >
-                Stay
+                {t('app.accessFirst.chat.stay')}
               </button>
               <button
                 type='button'
                 className='rounded-lg bg-[#725329] px-4 py-2 text-sm font-semibold text-white hover:bg-[#5F4522] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
                 onClick={handleConfirmGeneratingNavigation}
               >
-                {isConversationSwitchGuard ? 'Discard and open conversation' : 'Discard and start new conversation'}
+                {isConversationSwitchGuard
+                  ? t('app.accessFirst.chat.discardAndOpen')
+                  : t('app.accessFirst.chat.discardAndNew')}
               </button>
             </div>
           </div>

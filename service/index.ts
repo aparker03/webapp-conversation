@@ -1,6 +1,7 @@
 import type { IOnCompleted, IOnData, IOnError, IOnFile, IOnMessageEnd, IOnMessageReplace, IOnNodeFinished, IOnNodeStarted, IOnThought, IOnWorkflowFinished, IOnWorkflowStarted } from './base'
-import { del, get, post, ssePost } from './base'
+import { del, get, getAnonymousUserRequestHeaders, post, ssePost } from './base'
 import type { Feedbacktype } from '@/types/app'
+import type { AppParameters } from '@/types/app'
 
 export const sendChatMessage = async (
   body: Record<string, any>,
@@ -50,7 +51,7 @@ export const fetchChatList = async (conversationId: string) => {
 
 // init value. wait for server update
 export const fetchAppParams = async () => {
-  return get('parameters')
+  return get('parameters') as Promise<AppParameters>
 }
 
 export const updateFeedback = async ({ url, body }: { url: string, body: Feedbacktype }) => {
@@ -63,4 +64,66 @@ export const generationConversationName = async (id: string) => {
 
 export const deleteConversation = async (id: string) => {
   return del(`conversations/${id}`)
+}
+
+export class AudioRequestError extends Error {
+  translationKey: string
+
+  constructor(translationKey: string) {
+    super(translationKey)
+    this.name = 'AudioRequestError'
+    this.translationKey = translationKey
+  }
+}
+
+export const transcribeAudio = async (file: Blob, signal: AbortSignal) => {
+  const formData = new FormData()
+  formData.append('file', file, 'recording.wav')
+
+  const response = await fetch('/api/audio-to-text', {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAnonymousUserRequestHeaders(),
+    body: formData,
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new AudioRequestError('app.accessFirst.audio.transcriptionFailed')
+  }
+
+  const data = await response.json() as { text?: unknown }
+  return typeof data.text === 'string' ? data.text.trim() : ''
+}
+
+export const createSpeechAudio = async ({
+  messageId,
+  text,
+  voice,
+  signal,
+}: {
+  messageId?: string
+  text: string
+  voice?: string
+  signal: AbortSignal
+}) => {
+  const response = await fetch('/api/text-to-audio', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      ...getAnonymousUserRequestHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...(messageId ? { message_id: messageId } : { text }),
+      voice,
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new AudioRequestError('app.accessFirst.audio.creationFailed')
+  }
+
+  return response.blob()
 }

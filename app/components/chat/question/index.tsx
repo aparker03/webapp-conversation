@@ -1,6 +1,7 @@
 'use client'
 import type { FC } from 'react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
 import type { IChatItem } from '../type'
 import s from '../style.module.css'
@@ -15,6 +16,7 @@ type IQuestionProps = Pick<IChatItem, 'id' | 'content' | 'useCurrentUserAvatar'>
 }
 
 const Question: FC<IQuestionProps> = ({ id, content, useCurrentUserAvatar, imgSrcs, isPreparingResend, onEditAndResend }) => {
+  const { t } = useTranslation()
   const userName = ''
   return (
     <div className='flex items-start justify-end' key={id}>
@@ -25,12 +27,12 @@ const Question: FC<IQuestionProps> = ({ id, content, useCurrentUserAvatar, imgSr
               <button
                 type='button'
                 className='inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#725329] hover:bg-[#F3E8D6] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
-                title='This creates a new message and does not change past responses.'
-                aria-label='Edit and resend this message. This creates a new message and does not change past responses.'
+                title={t('app.accessFirst.chat.editAndResendHint')}
+                aria-label={t('app.accessFirst.chat.editAndResendLabel')}
                 onClick={() => onEditAndResend(id, content)}
               >
                 <ArrowUturnLeftIcon className='h-3.5 w-3.5' aria-hidden='true' />
-                Edit and resend
+                {t('app.accessFirst.chat.editAndResend')}
               </button>
             </div>
           )}
@@ -51,7 +53,9 @@ const Question: FC<IQuestionProps> = ({ id, content, useCurrentUserAvatar, imgSr
           </div>
         )
         : (
-          <div className={`${s.questionIcon} w-10 h-10 shrink-0 `}></div>
+          <div className={`${s.questionIcon} w-10 h-10 shrink-0`}>
+            {t('app.accessFirst.chat.you')}
+          </div>
         )}
     </div>
   )

@@ -7,12 +7,14 @@ import commonZh from './lang/common.zh'
 import commonVi from './lang/common.vi'
 import commonJa from './lang/common.ja'
 import commonFr from './lang/common.fr'
+import commonKo from './lang/common.ko'
 import appEn from './lang/app.en'
 import appEs from './lang/app.es'
 import appZh from './lang/app.zh'
 import appVi from './lang/app.vi'
 import appJa from './lang/app.ja'
 import appFr from './lang/app.fr'
+import appKo from './lang/app.ko'
 import toolsEn from './lang/tools.en'
 import toolsZh from './lang/tools.zh'
 import toolsVi from './lang/tools.vi'
@@ -42,6 +44,12 @@ const resources = {
       app: appZh,
       // tools
       tools: toolsZh,
+    },
+  },
+  'ko': {
+    translation: {
+      common: commonKo,
+      app: appKo,
     },
   },
   'vi': {
@@ -76,11 +84,13 @@ i18n.use(initReactI18next)
   .init({
     lng: 'en',
     fallbackLng: 'en',
+    supportedLngs: ['en', 'es', 'zh-Hans', 'ko'],
+    nonExplicitSupportedLngs: false,
     // debug: true,
     resources,
   })
 
 export const changeLanguage = (lan: Locale) => {
-  i18n.changeLanguage(lan)
+  return i18n.changeLanguage(lan)
 }
 export default i18n

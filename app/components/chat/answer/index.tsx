@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import type { FeedbackFunc } from '../type'
 import type { ChatItem, MessageRating, VisionFile } from '@/types/app'
 import type { Emoji } from '@/types/tools'
-import { HandThumbDownIcon, HandThumbUpIcon } from '@heroicons/react/24/outline'
+import { ArrowPathIcon, HandThumbDownIcon, HandThumbUpIcon, SpeakerWaveIcon, StopIcon } from '@heroicons/react/24/outline'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import Button from '@/app/components/base/button'
@@ -16,16 +16,19 @@ import ImageGallery from '../../base/image-gallery'
 import LoadingAnim from '../loading-anim'
 import s from '../style.module.css'
 import Thought from '../thought'
+import type { TextToSpeechState } from '../use-text-to-speech'
 
-function OperationBtn({ innerContent, onClick, className }: { innerContent: React.ReactNode, onClick?: () => void, className?: string }) {
+function OperationBtn({ innerContent, onClick, className, ariaLabel }: { innerContent: React.ReactNode, onClick?: () => void, className?: string, ariaLabel: string }) {
   return (
-    <div
+    <button
+      type='button'
+      aria-label={ariaLabel}
       className={`relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-white cursor-pointer text-gray-500 hover:text-gray-800 ${className ?? ''}`}
       style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
       onClick={onClick && onClick}
     >
       {innerContent}
-    </div>
+    </button>
   )
 }
 
@@ -39,18 +42,22 @@ const RatingIcon: FC<{ isLike: boolean }> = ({ isLike }) => {
   return isLike ? <HandThumbUpIcon className="w-4 h-4" /> : <HandThumbDownIcon className="w-4 h-4" />
 }
 
-const ResourceSearchStatus: FC = () => (
-  <div
-    className="flex items-center gap-3 text-sm font-medium text-[#5F4A2A]"
-    role="status"
-    aria-live="polite"
-  >
-    <span className="flex h-5 w-6 items-center justify-center">
-      <LoadingAnim type="text" />
-    </span>
-    <span>Generating response...</span>
-  </div>
-)
+const ResourceSearchStatus: FC = () => {
+  const { t } = useTranslation()
+
+  return (
+    <div
+      className="flex items-center gap-3 text-sm font-medium text-[#5F4A2A]"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="flex h-5 w-6 items-center justify-center">
+        <LoadingAnim type="text" />
+      </span>
+      <span>{t('app.accessFirst.chat.generatingResponse')}</span>
+    </div>
+  )
+}
 
 const EditIcon: FC<{ className?: string }> = ({ className }) => {
   return (
@@ -84,6 +91,9 @@ interface IAnswerProps {
   isResponding?: boolean
   allToolIcons?: Record<string, string | Emoji>
   suggestionClick?: (suggestion: string) => void
+  textToSpeechEnabled?: boolean
+  textToSpeechState?: TextToSpeechState
+  onToggleTextToSpeech?: (item: ChatItem) => void
 }
 
 // The component needs to maintain its own state to control whether to display input component
@@ -94,12 +104,19 @@ const Answer: FC<IAnswerProps> = ({
   isResponding,
   allToolIcons,
   suggestionClick = () => { },
+  textToSpeechEnabled = false,
+  textToSpeechState,
+  onToggleTextToSpeech,
 }) => {
   const { id, content, feedback, agent_thoughts, workflowProcess, suggestedQuestions = [] } = item
   const isAgentMode = !!agent_thoughts && agent_thoughts.length > 0
   const showWorkflowDebug = SHOW_WORKFLOW_DEBUG
   const hasContent = !!content?.trim()
   const shouldShowDebugLoading = showWorkflowDebug && isResponding && (isAgentMode ? (!content && (agent_thoughts || []).filter(item => !!item.thought || !!item.tool).length === 0) : !content)
+  const isSpeechControlActive = textToSpeechState?.messageId === id
+  const isSpeechLoading = isSpeechControlActive && textToSpeechState?.status === 'loading'
+  const isSpeechPlaying = isSpeechControlActive && textToSpeechState?.status === 'playing'
+  const hasSpeechError = isSpeechControlActive && textToSpeechState?.status === 'error'
 
   const { t } = useTranslation()
 
@@ -119,9 +136,11 @@ const Answer: FC<IAnswerProps> = ({
     return (
       <Tooltip
         selector={`user-feedback-${randomString(16)}`}
-        content={isLike ? '取消赞同' : '取消反对'}
+        content={isLike ? t('app.accessFirst.feedback.removeLike') : t('app.accessFirst.feedback.removeDislike')}
       >
-        <div
+        <button
+          type='button'
+          aria-label={isLike ? t('app.accessFirst.feedback.removeLike') : t('app.accessFirst.feedback.removeDislike')}
           className="relative box-border flex items-center justify-center h-7 w-7 p-0.5 rounded-lg bg-white cursor-pointer text-gray-500 hover:text-gray-800"
           style={{ boxShadow: '0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -2px rgba(0, 0, 0, 0.05)' }}
           onClick={async () => {
@@ -131,7 +150,7 @@ const Answer: FC<IAnswerProps> = ({
           <div className={`${ratingIconClassname} rounded-lg h-6 w-6 flex items-center justify-center`}>
             <RatingIcon isLike={isLike} />
           </div>
-        </div>
+        </button>
       </Tooltip>
     )
   }
@@ -147,10 +166,18 @@ const Answer: FC<IAnswerProps> = ({
         : (
           <div className="flex gap-1">
             <Tooltip selector={`user-feedback-${randomString(16)}`} content={t('common.operation.like') as string}>
-              {OperationBtn({ innerContent: <IconWrapper><RatingIcon isLike={true} /></IconWrapper>, onClick: () => onFeedback?.(id, { rating: 'like' }) })}
+              {OperationBtn({
+                innerContent: <IconWrapper><RatingIcon isLike={true} /></IconWrapper>,
+                onClick: () => onFeedback?.(id, { rating: 'like' }),
+                ariaLabel: t('common.operation.like'),
+              })}
             </Tooltip>
             <Tooltip selector={`user-feedback-${randomString(16)}`} content={t('common.operation.dislike') as string}>
-              {OperationBtn({ innerContent: <IconWrapper><RatingIcon isLike={false} /></IconWrapper>, onClick: () => onFeedback?.(id, { rating: 'dislike' }) })}
+              {OperationBtn({
+                innerContent: <IconWrapper><RatingIcon isLike={false} /></IconWrapper>,
+                onClick: () => onFeedback?.(id, { rating: 'dislike' }),
+                ariaLabel: t('common.operation.dislike'),
+              })}
             </Tooltip>
           </div>
         )
@@ -242,6 +269,44 @@ const Answer: FC<IAnswerProps> = ({
               {/* User feedback must be displayed */}
               {!feedbackDisabled && renderFeedbackRating(feedback?.rating)}
             </div>
+            {textToSpeechEnabled && hasContent && !isResponding && (
+              <div className='ml-2 mt-2 flex min-h-8 items-center gap-2'>
+                <button
+                  type='button'
+                  className='flex h-8 items-center gap-1.5 rounded-lg border border-[#DED2C1] bg-[#FFFDF9] px-2.5 text-xs font-semibold text-[#725329] hover:border-[#BFA783] hover:bg-[#F7F4EF] focus:outline-none focus:ring-2 focus:ring-[#8A642F]/30'
+                  aria-label={isSpeechPlaying
+                    ? t('app.accessFirst.audio.stopPlayback')
+                    : isSpeechLoading
+                      ? t('app.accessFirst.audio.cancelLoading')
+                      : t('app.accessFirst.audio.playResponse')}
+                  onClick={() => onToggleTextToSpeech?.(item)}
+                >
+                  {isSpeechLoading
+                    ? <ArrowPathIcon className='h-4 w-4 animate-spin' aria-hidden='true' />
+                    : isSpeechPlaying
+                      ? <StopIcon className='h-4 w-4' aria-hidden='true' />
+                      : <SpeakerWaveIcon className='h-4 w-4' aria-hidden='true' />}
+                  <span>
+                    {isSpeechLoading
+                      ? t('app.accessFirst.audio.loading')
+                      : isSpeechPlaying
+                        ? t('app.accessFirst.audio.stop')
+                        : hasSpeechError
+                          ? t('app.accessFirst.audio.retry')
+                          : t('app.accessFirst.audio.listen')}
+                  </span>
+                </button>
+                {isSpeechControlActive && textToSpeechState?.message && (
+                  <span
+                    className={`text-xs ${hasSpeechError ? 'text-red-700' : 'text-[#667085]'}`}
+                    role='status'
+                    aria-live='polite'
+                  >
+                    {textToSpeechState.message}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
